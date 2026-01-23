@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as crypto from "crypto";
-import { defineConfig, createSecret } from "@palindrom-ai/infra";
+import { defineConfig, createSecret, createContainer } from "@palindrom-ai/infra";
 
 // Get configuration
 const pulumiConfig = new pulumi.Config();
@@ -18,7 +18,7 @@ defineConfig({
   environment: environment,
 });
 
-// Naming convention
+// Naming convention for resources not managed by infra package
 const namePrefix = `fastify-api-${environment}`;
 
 // Common labels
@@ -29,7 +29,7 @@ const labels = {
 };
 
 // =============================================================================
-// Enable required APIs
+// Enable required APIs (not yet in @palindrom-ai/infra)
 // =============================================================================
 const enabledApis = [
   "run.googleapis.com",
@@ -43,30 +43,7 @@ const enabledApis = [
 }));
 
 // =============================================================================
-// Secret Manager - JWT Secret (using @palindrom-ai/infra)
-// =============================================================================
-const jwtSecretValue = crypto.randomBytes(32).toString("base64");
-const jwtSecret = createSecret("jwt", {
-  value: jwtSecretValue,
-});
-
-// =============================================================================
-// Service Account for Cloud Run
-// =============================================================================
-const serviceAccount = new gcp.serviceaccount.Account(`${namePrefix}-sa`, {
-  accountId: `${namePrefix}-sa`.substring(0, 28).replace(/[^a-z0-9-]/g, "-"),
-  displayName: `Service account for ${namePrefix}`,
-}, { dependsOn: enabledApis });
-
-// Grant secret access to service account
-new gcp.secretmanager.SecretIamMember(`${namePrefix}-jwt-secret-access`, {
-  secretId: jwtSecret.secretArn,
-  role: "roles/secretmanager.secretAccessor",
-  member: pulumi.interpolate`serviceAccount:${serviceAccount.email}`,
-});
-
-// =============================================================================
-// Artifact Registry Repository (for Docker images)
+// Artifact Registry (not yet in @palindrom-ai/infra)
 // =============================================================================
 const artifactRegistry = new gcp.artifactregistry.Repository(`${namePrefix}-repo`, {
   repositoryId: namePrefix.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
@@ -77,66 +54,36 @@ const artifactRegistry = new gcp.artifactregistry.Repository(`${namePrefix}-repo
 }, { dependsOn: enabledApis });
 
 // =============================================================================
-// Cloud Run Service (using Cloud Run v2 for compatibility)
+// Secret Manager - JWT Secret (using @palindrom-ai/infra)
 // =============================================================================
-const containerName = `${namePrefix}-service`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+const jwtSecretValue = crypto.randomBytes(32).toString("base64");
+const jwtSecret = createSecret("jwt", {
+  value: jwtSecretValue,
+});
 
-const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
-  name: containerName,
-  location: region,
-  ingress: "INGRESS_TRAFFIC_ALL",
-  deletionProtection: false,
-  template: {
-    serviceAccount: serviceAccount.email,
-    scaling: {
-      minInstanceCount: environment === "prod" ? 1 : 0,
-      maxInstanceCount: environment === "prod" ? 10 : 3,
-    },
-    containers: [
-      {
-        // Use a placeholder image initially - will be updated after first push
-        image: "gcr.io/cloudrun/hello",
-        ports: { containerPort: 8080, name: "http1" },
-        resources: {
-          limits: {
-            cpu: environment === "prod" ? "2" : "1",
-            memory: environment === "prod" ? "2Gi" : "512Mi",
-          },
-        },
-        envs: [
-          { name: "NODE_ENV", value: "production" },
-          { name: "APP_NAME", value: "fastify-api" },
-          { name: "LOG_LEVEL", value: environment === "prod" ? "info" : "debug" },
-          { name: "DOCS_TITLE", value: "Fastify API" },
-          { name: "DOCS_DESCRIPTION", value: `Fastify API - ${environment} environment` },
-          // Pass secret name for runtime fetching via @google-cloud/secret-manager
-          { name: "JWT_SECRET_NAME", value: jwtSecret.secretArn as unknown as string },
-        ],
-      },
-    ],
-    labels,
+// =============================================================================
+// Cloud Run Service (using @palindrom-ai/infra with Cloud Run v2)
+// =============================================================================
+const container = createContainer("api", {
+  image: "gcr.io/cloudrun/hello", // Placeholder - updated after first push
+  port: 8080,
+  size: environment === "prod" ? "large" : "small",
+  replicas: environment === "prod" ? 10 : 3,
+  healthCheckPath: "/health",
+  environment: {
+    NODE_ENV: "production",
+    APP_NAME: "fastify-api",
+    LOG_LEVEL: environment === "prod" ? "info" : "debug",
+    DOCS_TITLE: "Fastify API",
+    DOCS_DESCRIPTION: `Fastify API - ${environment} environment`,
   },
-  traffics: [
-    {
-      type: "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST",
-      percent: 100,
-    },
-  ],
-}, { dependsOn: [artifactRegistry, ...enabledApis] });
-
-// Allow public access
-new gcp.cloudrunv2.ServiceIamMember(`${namePrefix}-public-access`, {
-  name: service.name,
-  location: region,
-  role: "roles/run.invoker",
-  member: "allUsers",
+  link: [jwtSecret], // Auto-grants secret access and injects JWT_SECRET_NAME env var
 });
 
 // =============================================================================
 // Outputs
 // =============================================================================
-export const serviceUrl = service.uri;
-export const serviceName = service.name;
-export const serviceAccountEmail = serviceAccount.email;
+export const serviceUrl = container.url;
+export const serviceName = container.serviceArn;
 export const artifactRegistryUrl = pulumi.interpolate`${region}-docker.pkg.dev/${project}/${artifactRegistry.repositoryId}`;
 export const jwtSecretName = jwtSecret.secretName;
