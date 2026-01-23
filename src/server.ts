@@ -2,7 +2,8 @@
  * Production server entrypoint for Cloud Run deployment
  *
  * Required environment variables:
- * - JWT_SECRET: JWT signing secret (min 32 chars)
+ * - JWT_SECRET: JWT signing secret (min 32 chars) OR
+ * - JWT_SECRET_NAME: GCP Secret Manager secret name (e.g. projects/PROJECT/secrets/NAME)
  *
  * Optional environment variables:
  * - DATABASE_URL: PostgreSQL connection string (optional)
@@ -15,18 +16,57 @@
 
 import { createApp, type APIKeyInfo } from './index.js';
 
-// Validate required environment variables
-const requiredEnvVars = ['JWT_SECRET'] as const;
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    console.error(`Missing required environment variable: ${envVar}`);
-    process.exit(1);
+/**
+ * Fetch a secret from GCP Secret Manager
+ */
+async function getSecretFromGcp(secretName: string): Promise<string> {
+  const { SecretManagerServiceClient } = await import('@google-cloud/secret-manager');
+  const client = new SecretManagerServiceClient();
+
+  // Append /versions/latest if not already versioned
+  const versionedName = secretName.includes('/versions/')
+    ? secretName
+    : `${secretName}/versions/latest`;
+
+  const [version] = await client.accessSecretVersion({ name: versionedName });
+  const payload = version.payload?.data;
+
+  if (!payload) {
+    throw new Error(`Secret ${secretName} has no data`);
   }
+
+  if (typeof payload === 'string') {
+    return payload;
+  }
+  // payload is Uint8Array
+  return Buffer.from(payload).toString('utf8');
+}
+
+/**
+ * Resolve JWT secret - either from environment or GCP Secret Manager
+ */
+async function resolveJwtSecret(): Promise<string> {
+  // Direct secret value takes precedence (for local development)
+  if (process.env['JWT_SECRET']) {
+    return process.env['JWT_SECRET'];
+  }
+
+  // Check for GCP Secret Manager reference (set by @palindrom-ai/infra)
+  const secretName = process.env['JWT_SECRET_NAME'];
+  if (secretName) {
+    console.log(`Fetching JWT secret from Secret Manager: ${secretName}`);
+    return getSecretFromGcp(secretName);
+  }
+
+  throw new Error('Missing required environment variable: JWT_SECRET or JWT_SECRET_NAME');
 }
 
 async function main() {
   const port = parseInt(process.env['PORT'] ?? '8080', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';
+
+  // Resolve JWT secret (from env or Secret Manager)
+  const jwtSecret = await resolveJwtSecret();
 
   // Database config is optional
   const dbConfig = process.env['DATABASE_URL']
@@ -46,7 +86,7 @@ async function main() {
       db: dbConfig,
       auth: {
         jwt: {
-          secret: process.env['JWT_SECRET']!,
+          secret: jwtSecret,
           issuer: process.env['JWT_ISSUER'],
           expiresIn: process.env['JWT_EXPIRES_IN'] ?? '1h',
         },
