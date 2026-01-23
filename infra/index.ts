@@ -163,7 +163,7 @@ const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
     containers: [
       {
         image: imageUrl,
-        ports: [{ containerPort: 8080 }],
+        ports: { containerPort: 8080, name: "http1" },
         resources: {
           limits: {
             cpu: environment === "prod" ? "2" : "1",
