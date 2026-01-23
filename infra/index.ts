@@ -20,6 +20,20 @@ const labels = {
 };
 
 // =============================================================================
+// Enable required APIs
+// =============================================================================
+const enabledApis = [
+  "run.googleapis.com",
+  "secretmanager.googleapis.com",
+  "artifactregistry.googleapis.com",
+  "iam.googleapis.com",
+].map((api, index) => new gcp.projects.Service(`enable-${api.split('.')[0]}`, {
+  project,
+  service: api,
+  disableOnDestroy: false,
+}));
+
+// =============================================================================
 // Secret Manager - JWT Secret
 // =============================================================================
 const jwtSecret = new gcp.secretmanager.Secret(`${namePrefix}-jwt-secret`, {
@@ -28,71 +42,13 @@ const jwtSecret = new gcp.secretmanager.Secret(`${namePrefix}-jwt-secret`, {
     auto: {},
   },
   labels,
-});
+}, { dependsOn: enabledApis });
 
-// Create a secret version with a placeholder (should be updated via CLI or CI)
+// Generate a random JWT secret
+const jwtSecretValue = crypto.randomBytes(32).toString("base64");
 const jwtSecretVersion = new gcp.secretmanager.SecretVersion(`${namePrefix}-jwt-secret-version`, {
   secret: jwtSecret.id,
-  secretData: pulumi.secret("change-me-this-is-a-placeholder-secret-32chars"),
-});
-
-// =============================================================================
-// Cloud SQL - PostgreSQL Database
-// =============================================================================
-const dbInstance = new gcp.sql.DatabaseInstance(`${namePrefix}-db`, {
-  name: `${namePrefix}-db`,
-  region,
-  databaseVersion: "POSTGRES_16",
-  deletionProtection: environment === "prod",
-  settings: {
-    tier: environment === "prod" ? "db-custom-2-4096" : "db-f1-micro",
-    availabilityType: environment === "prod" ? "REGIONAL" : "ZONAL",
-    backupConfiguration: {
-      enabled: true,
-      startTime: "03:00",
-      pointInTimeRecoveryEnabled: environment === "prod",
-    },
-    ipConfiguration: {
-      ipv4Enabled: true,
-      authorizedNetworks: [],
-    },
-    userLabels: labels,
-  },
-});
-
-const database = new gcp.sql.Database(`${namePrefix}-database`, {
-  name: "fastify_api",
-  instance: dbInstance.name,
-});
-
-// Generate random password for database
-const dbPasswordValue = crypto.randomBytes(24).toString("base64url");
-const dbPassword = pulumi.secret(dbPasswordValue);
-
-const dbUser = new gcp.sql.User(`${namePrefix}-db-user`, {
-  name: "fastify",
-  instance: dbInstance.name,
-  password: dbPassword,
-});
-
-// Store the full DATABASE_URL in Secret Manager
-const databaseUrlSecret = new gcp.secretmanager.Secret(`${namePrefix}-database-url`, {
-  secretId: `${namePrefix}-database-url`,
-  replication: {
-    auto: {},
-  },
-  labels,
-});
-
-// Build the database URL and store it as a secret
-const databaseUrl = pulumi.all([dbInstance.connectionName, dbPassword]).apply(
-  ([connName, password]) =>
-    `postgresql://fastify:${password}@/fastify_api?host=/cloudsql/${connName}`
-);
-
-const databaseUrlSecretVersion = new gcp.secretmanager.SecretVersion(`${namePrefix}-database-url-version`, {
-  secret: databaseUrlSecret.id,
-  secretData: databaseUrl,
+  secretData: pulumi.secret(jwtSecretValue),
 });
 
 // =============================================================================
@@ -101,25 +57,12 @@ const databaseUrlSecretVersion = new gcp.secretmanager.SecretVersion(`${namePref
 const serviceAccount = new gcp.serviceaccount.Account(`${namePrefix}-sa`, {
   accountId: `${namePrefix}-sa`.substring(0, 28).replace(/[^a-z0-9-]/g, "-"),
   displayName: `Service account for ${namePrefix}`,
-});
+}, { dependsOn: enabledApis });
 
 // Grant secret access
 new gcp.secretmanager.SecretIamMember(`${namePrefix}-jwt-secret-access`, {
   secretId: jwtSecret.id,
   role: "roles/secretmanager.secretAccessor",
-  member: pulumi.interpolate`serviceAccount:${serviceAccount.email}`,
-});
-
-new gcp.secretmanager.SecretIamMember(`${namePrefix}-db-url-access`, {
-  secretId: databaseUrlSecret.id,
-  role: "roles/secretmanager.secretAccessor",
-  member: pulumi.interpolate`serviceAccount:${serviceAccount.email}`,
-});
-
-// Grant Cloud SQL client access
-new gcp.projects.IAMMember(`${namePrefix}-cloudsql-client`, {
-  project,
-  role: "roles/cloudsql.client",
   member: pulumi.interpolate`serviceAccount:${serviceAccount.email}`,
 });
 
@@ -132,7 +75,7 @@ const artifactRegistry = new gcp.artifactregistry.Repository(`${namePrefix}-repo
   format: "DOCKER",
   description: "Docker repository for fastify-api",
   labels,
-});
+}, { dependsOn: enabledApis });
 
 // =============================================================================
 // Cloud Run Service
@@ -152,17 +95,10 @@ const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
       minInstanceCount: environment === "prod" ? 1 : 0,
       maxInstanceCount: environment === "prod" ? 10 : 3,
     },
-    volumes: [
-      {
-        name: "cloudsql",
-        cloudSqlInstance: {
-          instances: [dbInstance.connectionName],
-        },
-      },
-    ],
     containers: [
       {
-        image: imageUrl,
+        // Use a placeholder image initially - will be updated after first push
+        image: "gcr.io/cloudrun/hello",
         ports: { containerPort: 8080, name: "http1" },
         resources: {
           limits: {
@@ -170,12 +106,6 @@ const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
             memory: environment === "prod" ? "2Gi" : "512Mi",
           },
         },
-        volumeMounts: [
-          {
-            name: "cloudsql",
-            mountPath: "/cloudsql",
-          },
-        ],
         envs: [
           { name: "NODE_ENV", value: "production" },
           { name: "PORT", value: "8080" },
@@ -183,15 +113,6 @@ const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
           { name: "LOG_LEVEL", value: environment === "prod" ? "info" : "debug" },
           { name: "DOCS_TITLE", value: "Fastify API" },
           { name: "DOCS_DESCRIPTION", value: `Fastify API - ${environment} environment` },
-          {
-            name: "DATABASE_URL",
-            valueSource: {
-              secretKeyRef: {
-                secret: databaseUrlSecret.secretId,
-                version: "latest",
-              },
-            },
-          },
           {
             name: "JWT_SECRET",
             valueSource: {
@@ -202,25 +123,6 @@ const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
             },
           },
         ],
-        startupProbe: {
-          httpGet: {
-            path: "/health",
-            port: 8080,
-          },
-          initialDelaySeconds: 0,
-          periodSeconds: 10,
-          timeoutSeconds: 3,
-          failureThreshold: 3,
-        },
-        livenessProbe: {
-          httpGet: {
-            path: "/health",
-            port: 8080,
-          },
-          periodSeconds: 30,
-          timeoutSeconds: 3,
-          failureThreshold: 3,
-        },
       },
     ],
     labels,
@@ -231,7 +133,7 @@ const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
       percent: 100,
     },
   ],
-}, { dependsOn: [databaseUrlSecretVersion, jwtSecretVersion, artifactRegistry] });
+}, { dependsOn: [jwtSecretVersion, artifactRegistry, ...enabledApis] });
 
 // Allow public access
 new gcp.cloudrunv2.ServiceIamMember(`${namePrefix}-public-access`, {
@@ -246,9 +148,6 @@ new gcp.cloudrunv2.ServiceIamMember(`${namePrefix}-public-access`, {
 // =============================================================================
 export const serviceUrl = service.uri;
 export const serviceName = service.name;
-export const databaseInstanceName = dbInstance.name;
-export const databaseConnectionName = dbInstance.connectionName;
 export const serviceAccountEmail = serviceAccount.email;
 export const artifactRegistryUrl = pulumi.interpolate`${region}-docker.pkg.dev/${project}/${artifactRegistry.repositoryId}`;
 export const jwtSecretId = jwtSecret.secretId;
-export const databaseUrlSecretId = databaseUrlSecret.secretId;

@@ -2,10 +2,10 @@
  * Production server entrypoint for Cloud Run deployment
  *
  * Required environment variables:
- * - DATABASE_URL: PostgreSQL connection string
  * - JWT_SECRET: JWT signing secret (min 32 chars)
  *
  * Optional environment variables:
+ * - DATABASE_URL: PostgreSQL connection string (optional)
  * - PORT: Server port (default: 8080)
  * - HOST: Server host (default: 0.0.0.0)
  * - LOG_LEVEL: Logging level (default: info)
@@ -16,7 +16,7 @@
 import { createApp, type APIKeyInfo } from './index.js';
 
 // Validate required environment variables
-const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
+const requiredEnvVars = ['JWT_SECRET'] as const;
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     console.error(`Missing required environment variable: ${envVar}`);
@@ -28,6 +28,14 @@ async function main() {
   const port = parseInt(process.env['PORT'] ?? '8080', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';
 
+  // Database config is optional
+  const dbConfig = process.env['DATABASE_URL']
+    ? {
+        connectionString: process.env['DATABASE_URL'],
+        poolSize: parseInt(process.env['DB_POOL_SIZE'] ?? '10', 10),
+      }
+    : undefined;
+
   const app = await createApp(
     {
       name: process.env['APP_NAME'] ?? 'fastify-api',
@@ -35,10 +43,7 @@ async function main() {
         port,
         host,
       },
-      db: {
-        connectionString: process.env['DATABASE_URL']!,
-        poolSize: parseInt(process.env['DB_POOL_SIZE'] ?? '10', 10),
-      },
+      db: dbConfig,
       auth: {
         jwt: {
           secret: process.env['JWT_SECRET']!,
