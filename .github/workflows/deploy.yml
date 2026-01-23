@@ -23,19 +23,16 @@ env:
   GCP_REGION: us-central1
 
 jobs:
-  build-and-push:
-    name: Build and Push Docker Image
+  setup:
+    name: Setup Environment
     runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
       environment: ${{ steps.set-env.outputs.environment }}
       project: ${{ steps.set-project.outputs.project }}
       workload_identity_provider: ${{ steps.set-project.outputs.workload_identity_provider }}
       service_account: ${{ steps.set-project.outputs.service_account }}
       pulumi_state_bucket: ${{ steps.set-project.outputs.pulumi_state_bucket }}
     steps:
-      - uses: actions/checkout@v4
-
       - name: Set environment
         id: set-env
         run: |
@@ -69,39 +66,13 @@ jobs:
               ;;
           esac
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ steps.set-project.outputs.workload_identity_provider }}
-          service_account: ${{ steps.set-project.outputs.service_account }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ steps.set-project.outputs.project }}/fastify-api-${{ steps.set-env.outputs.environment }}/fastify-api
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  deploy:
+  deploy-infra:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: setup
+    outputs:
+      artifact_registry_url: ${{ steps.outputs.outputs.artifact_registry_url }}
+      service_url: ${{ steps.outputs.outputs.service_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -116,8 +87,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ needs.build-and-push.outputs.workload_identity_provider }}
-          service_account: ${{ needs.build-and-push.outputs.service_account }}
+          workload_identity_provider: ${{ needs.setup.outputs.workload_identity_provider }}
+          service_account: ${{ needs.setup.outputs.service_account }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -125,22 +96,85 @@ jobs:
       - name: Install Pulumi
         run: curl -fsSL https://get.pulumi.com | sh && echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
 
-      - name: Deploy
+      - name: Deploy Infrastructure
         working-directory: infra
         run: |
           export PATH="$HOME/.pulumi/bin:$PATH"
-          pulumi login ${{ needs.build-and-push.outputs.pulumi_state_bucket }}
-          pulumi stack select ${{ needs.build-and-push.outputs.environment }} --create
+          pulumi login ${{ needs.setup.outputs.pulumi_state_bucket }}
+          pulumi stack select ${{ needs.setup.outputs.environment }} --create
           pulumi up --yes
         env:
           PULUMI_CONFIG_PASSPHRASE: ""
-          GOOGLE_PROJECT: ${{ needs.build-and-push.outputs.project }}
+          GOOGLE_PROJECT: ${{ needs.setup.outputs.project }}
 
-      - name: Get service URL
+      - name: Get Pulumi Outputs
+        id: outputs
         working-directory: infra
         run: |
           export PATH="$HOME/.pulumi/bin:$PATH"
-          echo "Service URL:"
-          pulumi stack output serviceUrl
+          echo "artifact_registry_url=$(pulumi stack output artifactRegistryUrl)" >> $GITHUB_OUTPUT
+          echo "service_url=$(pulumi stack output serviceUrl)" >> $GITHUB_OUTPUT
         env:
           PULUMI_CONFIG_PASSPHRASE: ""
+
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-infra]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ needs.setup.outputs.workload_identity_provider }}
+          service_account: ${{ needs.setup.outputs.service_account }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.deploy-infra.outputs.artifact_registry_url }}/fastify-api
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  update-service:
+    name: Update Cloud Run Service
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-infra, build-and-push]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ needs.setup.outputs.workload_identity_provider }}
+          service_account: ${{ needs.setup.outputs.service_account }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Update Cloud Run service
+        run: |
+          gcloud run services update fastify-api-${{ needs.setup.outputs.environment }}-service \
+            --image ${{ needs.deploy-infra.outputs.artifact_registry_url }}/fastify-api:latest \
+            --region ${{ env.GCP_REGION }}
+
+      - name: Output service URL
+        run: |
+          echo "Service URL: ${{ needs.deploy-infra.outputs.service_url }}"
