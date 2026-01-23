@@ -15,6 +15,27 @@ export {
 // Routes
 export { defineRoute, registerRoute, type RouteDefinition, type RouteSchema, type AuthType } from './routes/index.js';
 
+// OpenAPI schema extraction
+export {
+  getOpenAPISchema,
+  getOpenAPISchemaJSON,
+  getOpenAPIPaths,
+  type OpenAPISchema,
+  type OpenAPIInfo,
+  type OpenAPIServer,
+  type OpenAPITag,
+  type OpenAPIPathItem,
+  type OpenAPIOperation,
+  type OpenAPIParameter,
+  type OpenAPIRequestBody,
+  type OpenAPIResponse,
+  type OpenAPIMediaType,
+  type OpenAPISchemaObject,
+  type OpenAPIComponents,
+  type OpenAPISecurityScheme,
+  type OpenAPIReference,
+} from './openapi/index.js';
+
 // Auth types
 export type { JWTPayload, JWTConfig } from './plugins/auth/jwt.js';
 export type { APIKeyInfo, APIKeyConfig } from './plugins/auth/api-key.js';
