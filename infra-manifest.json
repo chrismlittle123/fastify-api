@@ -1,0 +1,8 @@
+{
+  "project": "fastify-api",
+  "resources": [
+    "projects/christopher-little-dev/locations/us-central1/services/fastify-api-api-container-dev",
+    "projects/christopher-little-dev/secrets/fastify-api-jwt-secret-dev",
+    "projects/christopher-little-dev/locations/us-central1/repositories/fastify-api-dev"
+  ]
+}
