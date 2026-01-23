@@ -1,5 +1,0 @@
-# check-my-toolkit configuration
-
-[infra]
-enabled = true
-manifest = "infra-manifest.json"
