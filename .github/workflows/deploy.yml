@@ -173,7 +173,7 @@ jobs:
 
       - name: Update Cloud Run service
         run: |
-          gcloud run services update fastify-api-api-container-${{ needs.setup.outputs.environment }} \
+          gcloud run services update fastify-api-${{ needs.setup.outputs.environment }}-service \
             --image ${{ needs.deploy-infra.outputs.artifact_registry_url }}/fastify-api:latest \
             --region ${{ env.GCP_REGION }}
 
