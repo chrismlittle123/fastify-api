@@ -102,6 +102,8 @@ jobs:
           export PATH="$HOME/.pulumi/bin:$PATH"
           pulumi login ${{ needs.setup.outputs.pulumi_state_bucket }}
           pulumi stack select ${{ needs.setup.outputs.environment }} --create
+          pulumi config set gcp:project ${{ needs.setup.outputs.project }}
+          pulumi config set gcp:region ${{ env.GCP_REGION }}
           pulumi up --yes
         env:
           PULUMI_CONFIG_PASSPHRASE: ""
