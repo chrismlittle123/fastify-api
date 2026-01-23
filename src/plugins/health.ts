@@ -1,0 +1,61 @@
+import type { FastifyInstance } from 'fastify';
+
+interface HealthCheckResult {
+  status: 'healthy' | 'unhealthy';
+  timestamp: string;
+  uptime: number;
+  checks: {
+    database?: {
+      status: 'healthy' | 'unhealthy';
+      latencyMs?: number;
+      error?: string;
+    };
+  };
+}
+
+export async function registerHealthCheck(app: FastifyInstance): Promise<void> {
+  app.get('/health', async (_request, _reply): Promise<HealthCheckResult> => {
+    const checks: HealthCheckResult['checks'] = {};
+
+    // Check database if available
+    if (app.db) {
+      const start = Date.now();
+      try {
+        await app.db.query('SELECT 1');
+        checks.database = {
+          status: 'healthy',
+          latencyMs: Date.now() - start,
+        };
+      } catch (error) {
+        checks.database = {
+          status: 'unhealthy',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+
+    const hasUnhealthy = Object.values(checks).some((c) => c?.status === 'unhealthy');
+
+    return {
+      status: hasUnhealthy ? 'unhealthy' : 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      checks,
+    };
+  });
+
+  // Simple liveness probe
+  app.get('/health/live', async () => ({ status: 'ok' }));
+
+  // Readiness probe (includes dependency checks)
+  app.get('/health/ready', async (_request, reply) => {
+    if (app.db) {
+      try {
+        await app.db.query('SELECT 1');
+      } catch {
+        return reply.status(503).send({ status: 'not ready', reason: 'database unavailable' });
+      }
+    }
+    return { status: 'ready' };
+  });
+}
