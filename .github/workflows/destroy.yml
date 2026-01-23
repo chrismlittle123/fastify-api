@@ -1,0 +1,139 @@
+name: Destroy GCP
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - stag
+          - prod
+      confirm:
+        description: 'Type "destroy" to confirm'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  GCP_REGION: us-central1
+
+jobs:
+  destroy-dev:
+    if: github.event.inputs.environment == 'dev' && github.event.inputs.confirm == 'destroy'
+    name: Destroy GCP Dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install infra dependencies
+        working-directory: infra
+        run: npm install
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/10492061315/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions@christopher-little-dev.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Pulumi
+        run: curl -fsSL https://get.pulumi.com | sh && echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Destroy
+        working-directory: infra
+        run: |
+          export PATH="$HOME/.pulumi/bin:$PATH"
+          pulumi login gs://pulumi-state-christopher-little-dev
+          pulumi stack select dev
+          pulumi destroy --yes
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ""
+          GOOGLE_PROJECT: christopher-little-dev
+
+  destroy-stag:
+    if: github.event.inputs.environment == 'stag' && github.event.inputs.confirm == 'destroy'
+    name: Destroy GCP Stag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install infra dependencies
+        working-directory: infra
+        run: npm install
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/93014782487/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions@christopher-little-stag.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Pulumi
+        run: curl -fsSL https://get.pulumi.com | sh && echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Destroy
+        working-directory: infra
+        run: |
+          export PATH="$HOME/.pulumi/bin:$PATH"
+          pulumi login gs://pulumi-state-christopher-little-stag
+          pulumi stack select stag
+          pulumi destroy --yes
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ""
+          GOOGLE_PROJECT: christopher-little-stag
+
+  destroy-prod:
+    if: github.event.inputs.environment == 'prod' && github.event.inputs.confirm == 'destroy'
+    name: Destroy GCP Prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install infra dependencies
+        working-directory: infra
+        run: npm install
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/978458954318/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions@christopher-little-prod.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Pulumi
+        run: curl -fsSL https://get.pulumi.com | sh && echo "$HOME/.pulumi/bin" >> $GITHUB_PATH
+
+      - name: Destroy
+        working-directory: infra
+        run: |
+          export PATH="$HOME/.pulumi/bin:$PATH"
+          pulumi login gs://pulumi-state-christopher-little-prod
+          pulumi stack select prod
+          pulumi destroy --yes
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ""
+          GOOGLE_PROJECT: christopher-little-prod

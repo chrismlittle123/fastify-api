@@ -1,0 +1,6 @@
+name: fastify-api
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Fastify API infrastructure on GCP Cloud Run

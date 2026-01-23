@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Tests
+tests
+coverage
+*.test.ts
+
+# Documentation
+docs
+*.md
+
+# Development files
+.env
+.env.*
+!.env.example
+
+# CI/CD
+.github
+
+# Infrastructure
+infra
+
+# Misc
+.DS_Store
+*.log
