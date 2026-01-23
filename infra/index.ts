@@ -108,7 +108,6 @@ const service = new gcp.cloudrunv2.Service(`${namePrefix}-service`, {
         },
         envs: [
           { name: "NODE_ENV", value: "production" },
-          { name: "PORT", value: "8080" },
           { name: "APP_NAME", value: "fastify-api" },
           { name: "LOG_LEVEL", value: environment === "prod" ? "info" : "debug" },
           { name: "DOCS_TITLE", value: "Fastify API" },
