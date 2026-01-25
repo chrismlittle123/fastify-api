@@ -40,7 +40,7 @@ export async function registerJWT(app: FastifyInstance, config: JWTConfig): Prom
   app.decorate('authenticateJWT', async function (request: FastifyRequest, reply: FastifyReply) {
     try {
       await request.jwtVerify();
-    } catch (_err) {
+    } catch {
       return reply.send(app.httpErrors.unauthorized('Invalid or expired token'));
     }
   });

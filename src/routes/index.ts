@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply, RouteOptions } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { z, type ZodSchema } from 'zod';
+import type { z} from 'zod';
+import type { ZodSchema } from 'zod';
 
 export type AuthType = 'jwt' | 'apiKey' | 'any' | 'public';
 
@@ -36,7 +37,7 @@ export function defineRoute<S extends RouteSchema>(definition: RouteDefinition<S
 export function registerRoute(app: FastifyInstance, route: RouteDefinition): void {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
 
-  const security: Array<Record<string, string[]>> = [];
+  const security: Record<string, string[]>[] = [];
   let preHandler: RouteOptions['preHandler'];
 
   switch (route.auth) {

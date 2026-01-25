@@ -156,7 +156,7 @@ export interface OpenAPIOperation {
   responses: Record<string, OpenAPIResponse | OpenAPIReference>;
   callbacks?: Record<string, unknown>;
   deprecated?: boolean;
-  security?: Array<Record<string, string[]>>;
+  security?: Record<string, string[]>[];
   servers?: OpenAPIServer[];
 }
 
@@ -211,7 +211,7 @@ export interface OpenAPISchema {
   paths?: Record<string, OpenAPIPathItem>;
   webhooks?: Record<string, OpenAPIPathItem | OpenAPIReference>;
   components?: OpenAPIComponents;
-  security?: Array<Record<string, string[]>>;
+  security?: Record<string, string[]>[];
   tags?: OpenAPITag[];
   externalDocs?: OpenAPIExternalDocs;
 }

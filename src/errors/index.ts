@@ -189,7 +189,7 @@ export async function registerErrorHandler(app: FastifyInstance): Promise<void> 
 
       // Handle Zod validation errors (from fastify-type-provider-zod)
       if (error.name === 'ZodError' && 'issues' in error) {
-        const zodError = error as Error & { issues: Array<{ path: (string | number)[]; message: string }> };
+        const zodError = error as Error & { issues: { path: (string | number)[]; message: string }[] };
         const appError = AppError.validationError('Validation failed', {
           issues: zodError.issues.map((issue) => ({
             path: issue.path.join('.'),
