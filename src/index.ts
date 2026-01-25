@@ -40,5 +40,22 @@ export {
 export type { JWTPayload, JWTConfig } from './plugins/auth/jwt.js';
 export type { APIKeyInfo, APIKeyConfig } from './plugins/auth/api-key.js';
 
+// Errors
+export {
+  AppError,
+  ErrorCode,
+  isAppError,
+  registerErrorHandler,
+} from './errors/index.js';
+
+// Observability
+export {
+  buildOTelEnvVars,
+  generateTracingSetup,
+  registerRequestLogging,
+  type ObservabilityConfig,
+  type OTelEnvVars,
+} from './observability/index.js';
+
 // Re-export commonly used dependencies
 export { z } from 'zod';

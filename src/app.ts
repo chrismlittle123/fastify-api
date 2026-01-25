@@ -11,6 +11,8 @@ import { registerHealthCheck } from './plugins/health.js';
 import { registerOpenAPI } from './plugins/openapi.js';
 import { registerJWT } from './plugins/auth/jwt.js';
 import { registerAPIKey, type APIKeyInfo } from './plugins/auth/api-key.js';
+import { registerErrorHandler } from './errors/index.js';
+import { registerRequestLogging } from './observability/index.js';
 
 // Extend Fastify types
 declare module 'fastify' {
@@ -57,6 +59,14 @@ export async function createApp(configInput: AppConfigInput, options?: AppOption
 
   // Register plugins
   await registerSensible(fastify);
+
+  // Register structured error handler
+  await registerErrorHandler(fastify);
+
+  // Register request logging for observability (if enabled)
+  if (config.observability?.requestLogging !== false) {
+    await registerRequestLogging(fastify);
+  }
 
   // Set up OpenAPI/Scalar docs if configured
   if (config.docs) {

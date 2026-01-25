@@ -51,6 +51,17 @@ export const appConfigSchema = z.object({
       pretty: z.boolean().default(process.env['NODE_ENV'] !== 'production'),
     })
     .default({}),
+
+  observability: z
+    .object({
+      /** OTLP endpoint for SigNoz (e.g., http://signoz:4318) */
+      otlpEndpoint: z.string().url().optional(),
+      /** Enable request logging with trace correlation */
+      requestLogging: z.boolean().default(true),
+      /** Additional resource attributes for traces */
+      attributes: z.record(z.string()).optional(),
+    })
+    .optional(),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;
