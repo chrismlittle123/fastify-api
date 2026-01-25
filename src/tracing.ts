@@ -7,13 +7,23 @@
  * Environment variables:
  * - OTEL_EXPORTER_OTLP_ENDPOINT: SigNoz endpoint (e.g., http://signoz:4318)
  * - OTEL_SERVICE_NAME: Service name for traces (default: fastify-api)
+ * - OTEL_CONSOLE_EXPORTER: Set to 'true' for local debugging (console output)
+ * - OTEL_DEBUG: Set to 'true' for OpenTelemetry debug logs
  */
 
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import {
+  LoggerProvider,
+  SimpleLogRecordProcessor,
+  BatchLogRecordProcessor,
+  ConsoleLogRecordExporter,
+} from '@opentelemetry/sdk-logs';
+import { logs } from '@opentelemetry/api-logs';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { ConsoleSpanExporter, SimpleSpanProcessor, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
@@ -58,6 +68,29 @@ const metricReader = otlpEndpoint
     })
   : undefined;
 
+// Configure log exporter and logger provider
+// This captures Pino logs (via auto-instrumentation) and sends them to SigNoz
+const logProcessors = [];
+if (useConsoleExporter) {
+  logProcessors.push(new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()));
+} else if (otlpEndpoint) {
+  logProcessors.push(
+    new BatchLogRecordProcessor(
+      new OTLPLogExporter({
+        url: `${otlpEndpoint}/v1/logs`,
+      })
+    )
+  );
+}
+
+const loggerProvider = new LoggerProvider({
+  resource,
+  processors: logProcessors.length > 0 ? logProcessors : undefined,
+});
+
+// Register the logger provider globally so Pino instrumentation can use it
+logs.setGlobalLoggerProvider(loggerProvider);
+
 if (!spanProcessor) {
   console.warn(
     '[tracing] No OTEL_EXPORTER_OTLP_ENDPOINT set. Set OTEL_CONSOLE_EXPORTER=true for local debugging.'
@@ -81,13 +114,13 @@ sdk.start();
 
 console.log(`[tracing] OpenTelemetry initialized for service: ${serviceName}`);
 if (otlpEndpoint) {
-  console.log(`[tracing] Sending traces to: ${otlpEndpoint}`);
+  console.log(`[tracing] Sending traces, metrics, and logs to: ${otlpEndpoint}`);
 }
 
 // Graceful shutdown
 const shutdown = async () => {
   try {
-    await sdk.shutdown();
+    await Promise.all([sdk.shutdown(), loggerProvider.shutdown()]);
     console.log('[tracing] OpenTelemetry shut down successfully');
   } catch (error) {
     console.error('[tracing] Error shutting down OpenTelemetry:', error);
