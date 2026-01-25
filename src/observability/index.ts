@@ -109,8 +109,17 @@ export async function registerRequestLogging(app: FastifyInstance): Promise<void
 
 /**
  * Create an OpenTelemetry tracing configuration file content
+ *
+ * @deprecated Use src/tracing.ts directly instead of generating code.
+ * This function is kept for backward compatibility but may produce outdated code.
  */
 export function generateTracingSetup(config: ObservabilityConfig): string {
+  const attributeLines = config.attributes
+    ? Object.entries(config.attributes)
+        .map(([key, value]) => `  '${key}': '${value}',`)
+        .join('\n')
+    : '';
+
   return `// OpenTelemetry tracing setup for ${config.serviceName}
 // This file should be imported before your application starts
 // Run with: node --import ./dist/tracing.js dist/server.js
@@ -120,19 +129,13 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
-const resource = new Resource({
+const resource = resourceFromAttributes({
   [ATTR_SERVICE_NAME]: '${config.serviceName}',
   [ATTR_SERVICE_VERSION]: process.env['npm_package_version'] ?? '0.0.0',
-${
-  config.attributes
-    ? Object.entries(config.attributes)
-        .map(([key, value]) => `  '${key}': '${value}',`)
-        .join('\n')
-    : ''
-}});
+${attributeLines}});
 
 const sdk = new NodeSDK({
   resource,
