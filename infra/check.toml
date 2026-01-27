@@ -1,5 +1,5 @@
-# check-my-toolkit configuration for infra
+# @standards-kit/conform configuration for infra
 [extends]
-registry = "github:chrismlittle123/check-my-toolkit-registry-community"
+registry = "github:chrismlittle123/standards-community"
 rulesets = ["typescript-internal"]
 
