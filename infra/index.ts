@@ -69,6 +69,7 @@ const container = createContainer("api", {
   port: 8080,
   size: environment === "prod" ? "large" : "small",
   replicas: environment === "prod" ? 10 : 3,
+  minInstances: 0,
   healthCheckPath: "/health",
   environment: {
     NODE_ENV: "production",

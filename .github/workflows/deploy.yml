@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 env:
-  GCP_REGION: us-central1
+  GCP_REGION: europe-west2
 
 jobs:
   setup:
