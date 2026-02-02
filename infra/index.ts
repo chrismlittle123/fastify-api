@@ -68,8 +68,8 @@ const container = createContainer("api", {
   image: "gcr.io/cloudrun/hello", // Placeholder - updated after first push
   port: 8080,
   size: environment === "prod" ? "large" : "small",
-  replicas: environment === "prod" ? 10 : 3,
   minInstances: 0,
+  maxInstances: environment === "prod" ? 10 : 3,
   healthCheckPath: "/health",
   environment: {
     NODE_ENV: "production",
