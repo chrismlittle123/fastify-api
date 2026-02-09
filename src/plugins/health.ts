@@ -21,7 +21,7 @@ export async function registerHealthCheck(app: FastifyInstance): Promise<void> {
     if (app.db) {
       const start = Date.now();
       try {
-        await app.db.query('SELECT 1');
+        await app.db.ping();
         checks.database = {
           status: 'healthy',
           latencyMs: Date.now() - start,
@@ -51,7 +51,7 @@ export async function registerHealthCheck(app: FastifyInstance): Promise<void> {
   app.get('/health/ready', async (_request, reply) => {
     if (app.db) {
       try {
-        await app.db.query('SELECT 1');
+        await app.db.ping();
       } catch {
         return reply.status(503).send({ status: 'not ready', reason: 'database unavailable' });
       }

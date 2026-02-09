@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fastifyJwt from '@fastify/jwt';
+import { AppError } from '../../errors/index.js';
 
 export interface JWTConfig {
   secret: string;
@@ -37,11 +38,11 @@ export async function registerJWT(app: FastifyInstance, config: JWTConfig): Prom
   });
 
   // Decorator for requiring JWT auth
-  app.decorate('authenticateJWT', async function (request: FastifyRequest, reply: FastifyReply) {
+  app.decorate('authenticateJWT', async function (request: FastifyRequest, _reply: FastifyReply) {
     try {
       await request.jwtVerify();
     } catch {
-      return reply.send(app.httpErrors.unauthorized('Invalid or expired token'));
+      throw AppError.unauthorized('Invalid or expired token');
     }
   });
 }

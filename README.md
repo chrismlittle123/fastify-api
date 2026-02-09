@@ -1,41 +1,17 @@
 # @palindrom/fastify-api
 
-Batteries-included Fastify API framework with Zod schemas, OpenAPI generation, authentication, and standardized patterns.
+Standardized Fastify API framework for Palindrom services. Install it as a dependency, provide config and business logic — monitoring, auth, errors, docs, and health checks are handled for you.
 
-## Features
+## Install
 
-- **Single config object** - Simple `createApp({ ... })` API
-- **Zod as source of truth** - Define schemas once, get validation + OpenAPI
-- **Authentication** - JWT tokens and API key authentication built-in
-- **OpenAPI & Scalar** - Auto-generated docs at `/docs`
-- **Structured errors** - `AppError` abstraction + `@fastify/sensible` HTTP errors
-- **Observability** - OpenTelemetry tracing for SigNoz integration
-- **Drizzle ORM** - Type-safe PostgreSQL with connection pooling
-- **Health checks** - `/health`, `/health/live`, `/health/ready` endpoints
-- **Docker ready** - PostgreSQL 16 via docker-compose
+```bash
+pnpm add @palindrom/fastify-api
+```
 
 ## Quick Start
 
-```bash
-# Install
-npm install @palindrom/fastify-api
-
-# Start PostgreSQL (for development)
-npm run docker:up
-
-# Run example server
-npx tsx examples/full-api-server.ts
-
-# Visit API docs
-open http://localhost:3000/docs
-```
-
-## Usage
-
-### Basic Server
-
 ```typescript
-import { createApp } from '@palindrom/fastify-api';
+import { createApp, defineRoute, registerRoute, z } from '@palindrom/fastify-api';
 
 const app = await createApp({
   name: 'my-api',
@@ -48,17 +24,50 @@ app.get('/hello', async () => ({ message: 'Hello, World!' }));
 await app.start();
 ```
 
-### Full-Featured Server
+Visit `http://localhost:3000/health` for health checks.
+
+## Defining Routes
+
+Use `defineRoute()` for type-safe routes with Zod validation and OpenAPI generation:
 
 ```typescript
-import { createApp, defineRoute, registerRoute, z } from '@palindrom/fastify-api';
+import { createApp, defineRoute, registerRoute, z, AppError } from '@palindrom/fastify-api';
 
+const getUser = defineRoute({
+  method: 'GET',
+  url: '/users/:id',
+  auth: 'jwt',
+  tags: ['Users'],
+  summary: 'Get user by ID',
+  schema: {
+    params: z.object({ id: z.string().uuid() }),
+    response: {
+      200: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        email: z.string(),
+      }),
+    },
+  },
+  handler: async (request) => {
+    const user = await findUser(request.params.id);
+    if (!user) {
+      throw AppError.notFound('User', request.params.id);
+    }
+    return user;
+  },
+});
+
+registerRoute(app, getUser);
+```
+
+## Authentication
+
+Configure auth in `createApp`. Routes declare their auth type with the `auth` field.
+
+```typescript
 const app = await createApp({
   name: 'my-api',
-  server: { port: 3000 },
-  db: {
-    connectionString: 'postgres://postgres:postgres@localhost:5432/mydb',
-  },
   auth: {
     jwt: {
       secret: 'your-secret-key-at-least-32-characters',
@@ -66,164 +75,67 @@ const app = await createApp({
       expiresIn: '1h',
     },
     apiKey: {
-      header: 'X-API-Key',
+      header: 'X-API-Key', // default
     },
   },
-  docs: {
-    title: 'My API',
-    description: 'API documentation',
-    version: '1.0.0',
-    path: '/docs',
-  },
-  logging: { level: 'info', pretty: true },
 }, {
   apiKeyValidator: async (key) => {
-    // Return { id, name, permissions } or null
-    if (key === 'valid-key') {
-      return { id: 'key-1', name: 'My Key', permissions: ['read', 'write'] };
-    }
-    return null;
+    const record = await db.findApiKey(key);
+    return record ? { id: record.id, name: record.name, permissions: record.permissions } : null;
   },
 });
-
-await app.start();
 ```
 
-## Defining Routes
+### Auth types
 
-Use `defineRoute()` for type-safe routes with Zod validation:
+| Type | Header | Description |
+|------|--------|-------------|
+| `'jwt'` | `Authorization: Bearer <token>` | JWT token required |
+| `'apiKey'` | Configured header (default `X-API-Key`) | API key required |
+| `'any'` | Either of the above | Accepts JWT or API key |
+| `'public'` | None | No auth required |
+
+### Issuing JWT tokens
 
 ```typescript
-import { defineRoute, registerRoute, z } from '@palindrom/fastify-api';
-
-const createUserRoute = defineRoute({
-  method: 'POST',
-  url: '/users',
-  auth: 'jwt',  // 'jwt' | 'apiKey' | 'any' | 'public'
-  tags: ['Users'],
-  summary: 'Create a new user',
-  description: 'Creates a user and returns the created object',
-  schema: {
-    body: z.object({
-      name: z.string().min(1).max(100),
-      email: z.string().email(),
-    }),
-    response: {
-      201: z.object({
-        id: z.string().uuid(),
-        name: z.string(),
-        email: z.string(),
-        createdAt: z.string().datetime(),
-      }),
-    },
-  },
-  handler: async (request, reply) => {
-    const { name, email } = request.body;
-    const user = await createUser({ name, email });
-    reply.status(201);
-    return user;
-  },
-});
-
-registerRoute(app, createUserRoute);
-```
-
-## Authentication
-
-### JWT Authentication
-
-```typescript
-// Login endpoint to issue tokens
-app.post('/login', async (request) => {
-  const { email, password } = request.body;
-
-  // Validate credentials...
-
-  const token = app.jwt.sign({
-    sub: user.id,
-    email: user.email,
-    roles: ['user'],
-  });
-
-  return { token, expiresIn: '1h' };
-});
-
-// Protected route
-const protectedRoute = defineRoute({
-  method: 'GET',
-  url: '/profile',
-  auth: 'jwt',
-  handler: async (request) => {
-    // request.user contains the decoded JWT payload
-    return { userId: request.user.sub, email: request.user.email };
-  },
+const token = app.jwt.sign({
+  sub: user.id,
+  email: user.email,
+  roles: ['user'],
 });
 ```
 
-### API Key Authentication
-
-```typescript
-const apiKeyRoute = defineRoute({
-  method: 'POST',
-  url: '/data',
-  auth: 'apiKey',
-  handler: async (request) => {
-    // request.apiKey contains { id, name, permissions }
-    return { createdBy: request.apiKey.name };
-  },
-});
-```
-
-### Mixed Authentication
-
-```typescript
-// Accept either JWT or API key
-const flexibleRoute = defineRoute({
-  method: 'GET',
-  url: '/resource',
-  auth: 'any',  // JWT or API key
-  handler: async (request) => {
-    const identity = request.user?.sub ?? request.apiKey?.name;
-    return { identity };
-  },
-});
-```
+Protected routes have `request.user` (JWT) or `request.apiKey` (API key) populated automatically.
 
 ## Error Handling
 
-### HTTP Errors (via @fastify/sensible)
+All errors produce a unified response format:
 
-```typescript
-app.get('/users/:id', async (request) => {
-  const user = await findUser(request.params.id);
-  if (!user) {
-    throw app.httpErrors.notFound('User not found');
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "User with id '123' not found",
+    "details": { "resource": "User", "id": "123" }
   }
-  return user;
-});
-
-// Available: badRequest, unauthorized, forbidden, notFound,
-// conflict, gone, internalServerError, serviceUnavailable, etc.
+}
 ```
 
-### Structured Errors (AppError)
+Use `AppError` factory methods to throw errors:
 
 ```typescript
-import { AppError, ErrorCode } from '@palindrom/fastify-api';
+import { AppError } from '@palindrom/fastify-api';
 
-// Factory methods
 throw AppError.notFound('User', '123');
 throw AppError.unauthorized('Token expired');
 throw AppError.badRequest('Invalid input', { field: 'email' });
 throw AppError.conflict('Email already exists');
 throw AppError.validationError('Validation failed', { errors: [...] });
-
-// Custom error
-throw new AppError(ErrorCode.DATABASE_ERROR, 'Connection failed', {
-  cause: originalError,
-  details: { host: 'localhost' },
-});
+throw AppError.serviceUnavailable();
+throw AppError.internal('Something broke', originalError);
 ```
+
+Zod validation errors and unknown errors are also normalized to this format automatically.
 
 ## Database
 
@@ -231,10 +143,11 @@ throw new AppError(ErrorCode.DATABASE_ERROR, 'Connection failed', {
 
 ```typescript
 const app = await createApp({
+  name: 'my-api',
   db: {
     connectionString: 'postgres://user:pass@host:5432/db',
-    poolSize: 10,        // Default: 10
-    idleTimeout: 30,     // Default: 30 seconds
+    poolSize: 10,
+    idleTimeout: 30,
   },
 });
 ```
@@ -242,31 +155,31 @@ const app = await createApp({
 ### Usage
 
 ```typescript
-// Raw SQL query
-const result = await app.db.query('SELECT * FROM users WHERE id = $1', [userId]);
+import { sql } from 'drizzle-orm';
+import { users } from './db/schema.js';
 
-// Drizzle ORM
-import { users } from './db/schema';
+// Drizzle ORM queries
 const allUsers = await app.db.drizzle.select().from(users);
 
-// Check if database is configured
-if (app.db) {
-  // Database operations
-}
+// Raw SQL via Drizzle
+const result = await app.db.drizzle.execute(sql`SELECT NOW()`);
+
+// Health check
+const isUp = await app.db.ping();
 ```
 
 ### Migrations
 
 ```bash
-npm run db:generate  # Generate migrations from schema
-npm run db:migrate   # Run pending migrations
-npm run db:push      # Push schema changes directly (dev only)
-npm run db:studio    # Open Drizzle Studio GUI
+pnpm run db:generate   # Generate migrations from schema
+pnpm run db:migrate    # Run pending migrations
+pnpm run db:push       # Push schema changes directly (dev only)
+pnpm run db:studio     # Open Drizzle Studio GUI
 ```
 
 ## Health Checks
 
-Three endpoints are automatically registered:
+Three endpoints are registered automatically:
 
 | Endpoint | Purpose | Response |
 |----------|---------|----------|
@@ -276,53 +189,42 @@ Three endpoints are automatically registered:
 
 ## OpenAPI Documentation
 
-When `docs` is configured, these endpoints are available:
-
-- `GET /docs` - Scalar interactive documentation
-- `GET /openapi.json` - OpenAPI 3.1 specification
+Configure `docs` to get Scalar interactive documentation and the OpenAPI spec:
 
 ```typescript
 const app = await createApp({
+  name: 'my-api',
   docs: {
     title: 'My API',
-    description: 'Full API documentation',
+    description: 'API documentation',
     version: '1.0.0',
     path: '/docs',
   },
 });
 ```
 
-## Observability
+- `GET /docs` — Scalar interactive docs
+- `GET /openapi.json` — OpenAPI 3.1 specification
 
-### OpenTelemetry Tracing
+## Tracing
 
-```typescript
-// Configure in createApp
-const app = await createApp({
-  observability: {
-    otlpEndpoint: 'http://signoz:4318',
-    requestLogging: true,
-    attributes: { 'deployment.environment': 'production' },
-  },
-});
-```
-
-### Running with Tracing
+Enable OpenTelemetry tracing with one flag at startup:
 
 ```bash
-# Set environment variables
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz:4318
-export OTEL_SERVICE_NAME=my-api
-
-# Run with tracing
-node --import ./dist/tracing.js dist/server.js
+node --import @palindrom/fastify-api/tracing dist/server.js
 ```
 
-### Testing Tracing Locally
+Set environment variables to configure the exporter:
 
 ```bash
-# Console output (no SigNoz needed)
-OTEL_CONSOLE_EXPORTER=true pnpm exec tsx scripts/test-tracing.ts
+OTEL_SERVICE_NAME=my-api
+OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz:4318
+```
+
+For local debugging, use console output:
+
+```bash
+OTEL_CONSOLE_EXPORTER=true node --import @palindrom/fastify-api/tracing dist/server.js
 ```
 
 ## Configuration Reference
@@ -332,49 +234,26 @@ OTEL_CONSOLE_EXPORTER=true pnpm exec tsx scripts/test-tracing.ts
 | `name` | `string` | required | Application name |
 | `server.port` | `number` | `3000` | Server port |
 | `server.host` | `string` | `0.0.0.0` | Server host |
-| `db.connectionString` | `string` | - | PostgreSQL connection URL |
+| `db.connectionString` | `string` | — | PostgreSQL connection URL |
 | `db.poolSize` | `number` | `10` | Connection pool size |
 | `db.idleTimeout` | `number` | `30` | Idle timeout (seconds) |
-| `auth.jwt.secret` | `string` | - | JWT signing secret (min 32 chars) |
-| `auth.jwt.issuer` | `string` | - | JWT issuer claim |
-| `auth.jwt.audience` | `string` | - | JWT audience claim |
+| `auth.jwt.secret` | `string` | — | JWT signing secret (min 32 chars) |
+| `auth.jwt.issuer` | `string` | — | JWT issuer claim |
+| `auth.jwt.audience` | `string` | — | JWT audience claim |
 | `auth.jwt.expiresIn` | `string` | `1h` | Token expiration |
 | `auth.apiKey.header` | `string` | `X-API-Key` | API key header name |
-| `docs.title` | `string` | - | OpenAPI title |
-| `docs.description` | `string` | - | OpenAPI description |
+| `docs.title` | `string` | — | OpenAPI title |
+| `docs.description` | `string` | — | OpenAPI description |
 | `docs.version` | `string` | `1.0.0` | OpenAPI version |
 | `docs.path` | `string` | `/docs` | Docs endpoint path |
 | `logging.level` | `string` | `info` | Log level |
 | `logging.pretty` | `boolean` | `true` (dev) | Pretty print logs |
-| `observability.otlpEndpoint` | `string` | - | OTLP endpoint for SigNoz |
+| `observability.otlpEndpoint` | `string` | — | OTLP endpoint |
 | `observability.requestLogging` | `boolean` | `true` | Enable request logging |
-
-## Scripts
-
-```bash
-npm run build        # Build TypeScript
-npm run dev          # Watch mode
-npm run test         # Run tests (watch)
-npm run test:run     # Run tests once
-npm run test:e2e     # Run E2E tests only
-npm run lint         # Lint code
-npm run lint:fix     # Fix lint errors
-npm run typecheck    # Type check
-npm run docker:up    # Start PostgreSQL
-npm run docker:down  # Stop PostgreSQL
-```
 
 ## Examples
 
 See the `examples/` directory:
 
-- [`basic-server.ts`](examples/basic-server.ts) - Minimal setup
-- [`full-api-server.ts`](examples/full-api-server.ts) - All features demonstrated
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
-
-## License
-
-MIT
+- [`basic-server.ts`](examples/basic-server.ts) — Minimal setup
+- [`full-api-server.ts`](examples/full-api-server.ts) — All features demonstrated

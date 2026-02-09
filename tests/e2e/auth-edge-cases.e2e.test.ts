@@ -3,9 +3,35 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createTestApp, type TestContext } from './setup.js';
-import { z } from '../../src/index.js';
+import { createTestApp, TEST_API_KEYS, type TestContext } from './setup.js';
+import { createApp, z } from '../../src/index.js';
 import { registerRoute, defineRoute } from '../../src/routes/index.js';
+
+async function createCustomHeaderTestApp(): Promise<TestContext> {
+  const app = await createApp(
+    {
+      name: 'test-api-custom-header',
+      server: { port: 0, host: '127.0.0.1' },
+      auth: {
+        jwt: {
+          secret: 'test-secret-key-that-is-at-least-32-characters-long',
+          issuer: 'test-api',
+          expiresIn: '1h',
+        },
+        apiKey: {
+          header: 'X-Custom-Key',
+        },
+      },
+      logging: { level: 'error', pretty: false },
+    },
+    {
+      apiKeyValidator: async (key: string) => TEST_API_KEYS.get(key) ?? null,
+    }
+  );
+  const getAuthToken = async (email = 'test@example.com') =>
+    app.jwt.sign({ sub: 'test-user-123', email, roles: ['user'] });
+  return { app, getAuthToken };
+}
 
 describe('E2E: Authentication Edge Cases', () => {
   let ctx: TestContext;
@@ -238,6 +264,60 @@ describe('E2E: Authentication Edge Cases', () => {
 
       // With 'any' auth, if JWT header is present (even invalid), it tries JWT first
       // and fails with 401 - doesn't fall back to API key
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('Custom API Key Header with any auth', () => {
+    let customCtx: TestContext;
+
+    beforeAll(async () => {
+      customCtx = await createCustomHeaderTestApp();
+
+      const anyRoute = defineRoute({
+        method: 'GET',
+        url: '/test/auth/custom-any',
+        auth: 'any',
+        schema: {
+          response: {
+            200: z.object({ authType: z.string() }),
+          },
+        },
+        handler: async (request) => {
+          const authType = request.user ? 'jwt' : request.apiKey ? 'apiKey' : 'none';
+          return { authType };
+        },
+      });
+      registerRoute(customCtx.app, anyRoute);
+    });
+
+    afterAll(async () => {
+      await customCtx.app.close();
+    });
+
+    it('should accept custom API key header in any auth mode', async () => {
+      const response = await customCtx.app.inject({
+        method: 'GET',
+        url: '/test/auth/custom-any',
+        headers: {
+          'x-custom-key': 'test-api-key-123',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.authType).toBe('apiKey');
+    });
+
+    it('should NOT accept default x-api-key header when custom header is configured', async () => {
+      const response = await customCtx.app.inject({
+        method: 'GET',
+        url: '/test/auth/custom-any',
+        headers: {
+          'x-api-key': 'test-api-key-123',
+        },
+      });
+
       expect(response.statusCode).toBe(401);
     });
   });

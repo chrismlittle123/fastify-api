@@ -15,7 +15,8 @@
  *   http://localhost:3000/health - Health check
  */
 
-import { createApp, z, defineRoute, registerRoute, type APIKeyInfo } from '../src/index.js';
+import { createApp, z, defineRoute, registerRoute, AppError, type APIKeyInfo } from '../src/index.js';
+import { sql } from 'drizzle-orm';
 
 // Simulated API keys store (in real app, this would be in database)
 const API_KEYS = new Map<string, APIKeyInfo>([
@@ -152,7 +153,7 @@ async function main() {
     handler: async (request) => {
       const item = items.get(request.params.id);
       if (!item) {
-        throw app.httpErrors.notFound(`Item ${request.params.id} not found`);
+        throw AppError.notFound('Item', request.params.id);
       }
       return item;
     },
@@ -261,7 +262,7 @@ async function main() {
 
       // Demo: accept any login with password "demo"
       if (password !== 'demo') {
-        throw app.httpErrors.unauthorized('Invalid credentials');
+        throw AppError.unauthorized('Invalid credentials');
       }
 
       const token = app.jwt.sign({
@@ -297,14 +298,12 @@ async function main() {
     },
     handler: async () => {
       if (!app.db) {
-        throw app.httpErrors.serviceUnavailable('Database not configured');
+        throw AppError.serviceUnavailable('Database not configured');
       }
 
-      const result = (await app.db.query('SELECT NOW() as current_time')) as Array<{
-        current_time: Date;
-      }>;
+      const result = await app.db.drizzle.execute<{ current_time: string }>(sql`SELECT NOW() as current_time`);
       return {
-        serverTime: result[0]?.current_time.toISOString(),
+        serverTime: result[0]?.current_time ?? new Date().toISOString(),
         source: 'postgresql',
       };
     },

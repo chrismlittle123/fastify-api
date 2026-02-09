@@ -23,7 +23,7 @@ describe('fastify-sensible integration', () => {
     expect(typeof app.httpErrors.unauthorized).toBe('function');
   });
 
-  it('should handle thrown httpErrors correctly', async () => {
+  it('should normalize thrown httpErrors to AppError format', async () => {
     app = await createApp({
       name: 'test-app',
       logging: { level: 'error' },
@@ -40,10 +40,11 @@ describe('fastify-sensible integration', () => {
 
     expect(response.statusCode).toBe(404);
     const body = JSON.parse(response.body);
-    expect(body.message).toBe('Resource not found');
+    expect(body.error.code).toBe('NOT_FOUND');
+    expect(body.error.message).toBe('Resource not found');
   });
 
-  it('should handle badRequest error', async () => {
+  it('should normalize badRequest to AppError format', async () => {
     app = await createApp({
       name: 'test-app',
       logging: { level: 'error' },
@@ -60,6 +61,7 @@ describe('fastify-sensible integration', () => {
 
     expect(response.statusCode).toBe(400);
     const body = JSON.parse(response.body);
-    expect(body.message).toBe('Invalid input');
+    expect(body.error.code).toBe('BAD_REQUEST');
+    expect(body.error.message).toBe('Invalid input');
   });
 });

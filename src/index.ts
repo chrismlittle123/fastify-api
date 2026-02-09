@@ -5,12 +5,7 @@ export { createApp, type App, type AppOptions, type ZodTypeProvider } from './ap
 export { appConfigSchema, type AppConfig, type AppConfigInput } from './config/index.js';
 
 // Database
-export {
-  createDatabase,
-  closeDatabase,
-  type Database,
-  type DatabaseOptions,
-} from './db/index.js';
+export { type Database } from './db/index.js';
 
 // Routes
 export { defineRoute, registerRoute, type RouteDefinition, type RouteSchema, type AuthType } from './routes/index.js';
@@ -45,14 +40,11 @@ export {
   AppError,
   ErrorCode,
   isAppError,
-  registerErrorHandler,
 } from './errors/index.js';
 
 // Observability
 export {
   buildOTelEnvVars,
-  generateTracingSetup,
-  registerRequestLogging,
   type ObservabilityConfig,
   type OTelEnvVars,
 } from './observability/index.js';

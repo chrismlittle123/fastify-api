@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { AppError } from '../../errors/index.js';
 
 export interface APIKeyConfig {
   header?: string;
@@ -28,17 +29,17 @@ export async function registerAPIKey(app: FastifyInstance, config: APIKeyConfig)
   app.decorateRequest('apiKey', undefined);
 
   // Decorator for requiring API key auth
-  app.decorate('authenticateAPIKey', async function (request: FastifyRequest, reply: FastifyReply) {
+  app.decorate('authenticateAPIKey', async function (request: FastifyRequest, _reply: FastifyReply) {
     const apiKey = request.headers[headerName.toLowerCase()] as string | undefined;
 
     if (!apiKey) {
-      return reply.send(app.httpErrors.unauthorized(`Missing ${headerName} header`));
+      throw AppError.unauthorized(`Missing ${headerName} header`);
     }
 
     const keyInfo = await config.validate(apiKey);
 
     if (!keyInfo) {
-      return reply.send(app.httpErrors.unauthorized('Invalid API key'));
+      throw AppError.unauthorized('Invalid API key');
     }
 
     request.apiKey = keyInfo;

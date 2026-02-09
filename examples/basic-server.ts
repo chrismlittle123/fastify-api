@@ -6,7 +6,8 @@
  *   npx tsx examples/basic-server.ts
  */
 
-import { createApp } from '../src/index.js';
+import { createApp, AppError } from '../src/index.js';
+import { sql } from 'drizzle-orm';
 
 async function main() {
   const app = await createApp({
@@ -29,13 +30,13 @@ async function main() {
     return { message: 'Hello, World!' };
   });
 
-  // Example route using httpErrors
+  // Example route using AppError
   app.get('/users/:id', async (request) => {
     const { id } = request.params as { id: string };
 
     // Simulate user lookup
     if (id !== '1') {
-      throw app.httpErrors.notFound(`User ${id} not found`);
+      throw AppError.notFound('User', id);
     }
 
     return {
@@ -48,10 +49,10 @@ async function main() {
   // Example route using database
   app.get('/db-test', async () => {
     if (!app.db) {
-      throw app.httpErrors.serviceUnavailable('Database not configured');
+      throw AppError.serviceUnavailable('Database not configured');
     }
 
-    const result = await app.db.query('SELECT NOW() as current_time');
+    const result = await app.db.drizzle.execute(sql`SELECT NOW() as current_time`);
     return { result };
   });
 

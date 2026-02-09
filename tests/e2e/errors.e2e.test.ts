@@ -6,6 +6,15 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestApp, type TestContext } from './setup.js';
 import { z } from '../../src/index.js';
 import { registerRoute, defineRoute } from '../../src/routes/index.js';
+import { AppError } from '../../src/errors/index.js';
+
+const errorResponseSchema = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    details: z.record(z.unknown()).optional(),
+  }),
+});
 
 describe('E2E: Error Handling', () => {
   let ctx: TestContext;
@@ -19,12 +28,10 @@ describe('E2E: Error Handling', () => {
       url: '/test/errors/not-found',
       auth: 'public',
       schema: {
-        response: {
-          404: z.object({ statusCode: z.number(), error: z.string(), message: z.string() }),
-        },
+        response: { 404: errorResponseSchema },
       },
-      handler: async (request, reply) => {
-        throw reply.server.httpErrors.notFound('Resource not found');
+      handler: async () => {
+        throw AppError.notFound('Resource');
       },
     });
     registerRoute(ctx.app, notFoundRoute);
@@ -34,12 +41,10 @@ describe('E2E: Error Handling', () => {
       url: '/test/errors/bad-request',
       auth: 'public',
       schema: {
-        response: {
-          400: z.object({ statusCode: z.number(), error: z.string(), message: z.string() }),
-        },
+        response: { 400: errorResponseSchema },
       },
-      handler: async (request, reply) => {
-        throw reply.server.httpErrors.badRequest('Invalid input');
+      handler: async () => {
+        throw AppError.badRequest('Invalid input');
       },
     });
     registerRoute(ctx.app, badRequestRoute);
@@ -49,12 +54,10 @@ describe('E2E: Error Handling', () => {
       url: '/test/errors/forbidden',
       auth: 'public',
       schema: {
-        response: {
-          403: z.object({ statusCode: z.number(), error: z.string(), message: z.string() }),
-        },
+        response: { 403: errorResponseSchema },
       },
-      handler: async (request, reply) => {
-        throw reply.server.httpErrors.forbidden('Access denied');
+      handler: async () => {
+        throw AppError.forbidden('Access denied');
       },
     });
     registerRoute(ctx.app, forbiddenRoute);
@@ -65,12 +68,10 @@ describe('E2E: Error Handling', () => {
       auth: 'public',
       schema: {
         body: z.object({ id: z.string() }),
-        response: {
-          409: z.object({ statusCode: z.number(), error: z.string(), message: z.string() }),
-        },
+        response: { 409: errorResponseSchema },
       },
-      handler: async (request, reply) => {
-        throw reply.server.httpErrors.conflict('Resource already exists');
+      handler: async () => {
+        throw AppError.conflict('Resource already exists');
       },
     });
     registerRoute(ctx.app, conflictRoute);
@@ -80,12 +81,10 @@ describe('E2E: Error Handling', () => {
       url: '/test/errors/internal',
       auth: 'public',
       schema: {
-        response: {
-          500: z.object({ statusCode: z.number(), error: z.string(), message: z.string() }),
-        },
+        response: { 500: errorResponseSchema },
       },
-      handler: async (request, reply) => {
-        throw reply.server.httpErrors.internalServerError('Something went wrong');
+      handler: async () => {
+        throw AppError.internal('Something went wrong');
       },
     });
     registerRoute(ctx.app, internalErrorRoute);
@@ -95,12 +94,10 @@ describe('E2E: Error Handling', () => {
       url: '/test/errors/unavailable',
       auth: 'public',
       schema: {
-        response: {
-          503: z.object({ statusCode: z.number(), error: z.string(), message: z.string() }),
-        },
+        response: { 503: errorResponseSchema },
       },
-      handler: async (request, reply) => {
-        throw reply.server.httpErrors.serviceUnavailable('Service temporarily unavailable');
+      handler: async () => {
+        throw AppError.serviceUnavailable('Service temporarily unavailable');
       },
     });
     registerRoute(ctx.app, serviceUnavailableRoute);
@@ -119,9 +116,8 @@ describe('E2E: Error Handling', () => {
 
       expect(response.statusCode).toBe(404);
       const body = JSON.parse(response.body);
-      expect(body.statusCode).toBe(404);
-      expect(body.error).toBe('Not Found');
-      expect(body.message).toBe('Resource not found');
+      expect(body.error.code).toBe('NOT_FOUND');
+      expect(body.error.message).toBe('Resource not found');
     });
 
     it('should return 400 Bad Request with proper format', async () => {
@@ -132,9 +128,8 @@ describe('E2E: Error Handling', () => {
 
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
-      expect(body.statusCode).toBe(400);
-      expect(body.error).toBe('Bad Request');
-      expect(body.message).toBe('Invalid input');
+      expect(body.error.code).toBe('BAD_REQUEST');
+      expect(body.error.message).toBe('Invalid input');
     });
 
     it('should return 403 Forbidden with proper format', async () => {
@@ -145,9 +140,8 @@ describe('E2E: Error Handling', () => {
 
       expect(response.statusCode).toBe(403);
       const body = JSON.parse(response.body);
-      expect(body.statusCode).toBe(403);
-      expect(body.error).toBe('Forbidden');
-      expect(body.message).toBe('Access denied');
+      expect(body.error.code).toBe('FORBIDDEN');
+      expect(body.error.message).toBe('Access denied');
     });
 
     it('should return 409 Conflict with proper format', async () => {
@@ -160,9 +154,8 @@ describe('E2E: Error Handling', () => {
 
       expect(response.statusCode).toBe(409);
       const body = JSON.parse(response.body);
-      expect(body.statusCode).toBe(409);
-      expect(body.error).toBe('Conflict');
-      expect(body.message).toBe('Resource already exists');
+      expect(body.error.code).toBe('CONFLICT');
+      expect(body.error.message).toBe('Resource already exists');
     });
 
     it('should return 500 Internal Server Error with proper format', async () => {
@@ -173,9 +166,8 @@ describe('E2E: Error Handling', () => {
 
       expect(response.statusCode).toBe(500);
       const body = JSON.parse(response.body);
-      expect(body.statusCode).toBe(500);
-      expect(body.error).toBe('Internal Server Error');
-      expect(body.message).toBe('Something went wrong');
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+      expect(body.error.message).toBe('Something went wrong');
     });
 
     it('should return 503 Service Unavailable with proper format', async () => {
@@ -186,9 +178,8 @@ describe('E2E: Error Handling', () => {
 
       expect(response.statusCode).toBe(503);
       const body = JSON.parse(response.body);
-      expect(body.statusCode).toBe(503);
-      expect(body.error).toBe('Service Unavailable');
-      expect(body.message).toBe('Service temporarily unavailable');
+      expect(body.error.code).toBe('SERVICE_UNAVAILABLE');
+      expect(body.error.message).toBe('Service temporarily unavailable');
     });
   });
 

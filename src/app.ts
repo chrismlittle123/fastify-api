@@ -5,7 +5,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { appConfigSchema, type AppConfigInput, type AppConfig } from './config/index.js';
-import { createDatabase, closeDatabase, type Database } from './db/index.js';
+import { createDatabase, type Database } from './db/index.js';
 import { registerSensible } from './plugins/sensible.js';
 import { registerHealthCheck } from './plugins/health.js';
 import { registerOpenAPI } from './plugins/openapi.js';
@@ -103,7 +103,7 @@ export async function createApp(configInput: AppConfigInput, options?: AppOption
 
     fastify.addHook('onClose', async () => {
       fastify.log.info('Closing database connection');
-      await closeDatabase(db);
+      await db.close();
     });
   }
 

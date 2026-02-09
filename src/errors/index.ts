@@ -173,17 +173,14 @@ export async function registerErrorHandler(app: FastifyInstance): Promise<void> 
         return;
       }
 
-      // Handle Fastify/sensible HTTP errors - preserve original format for backward compatibility
+      // Handle Fastify/sensible HTTP errors - normalize to AppError format
       if ('statusCode' in error && typeof error.statusCode === 'number') {
         const httpError = error as Error & { statusCode: number; expose?: boolean };
-        request.log.error({ err: error }, 'HTTP error');
+        const code = httpStatusToErrorCode(httpError.statusCode);
+        const appError = new AppError(code, error.message);
 
-        // Preserve the @fastify/sensible response format
-        await reply.status(httpError.statusCode).send({
-          statusCode: httpError.statusCode,
-          error: getHttpErrorName(httpError.statusCode),
-          message: error.message,
-        });
+        request.log.error({ err: error }, 'HTTP error');
+        await reply.status(httpError.statusCode).send(appError.toJSON());
         return;
       }
 
@@ -204,34 +201,26 @@ export async function registerErrorHandler(app: FastifyInstance): Promise<void> 
       // Handle unknown errors
       request.log.error({ err: error }, 'Unhandled error');
 
-      await reply.status(500).send({
-        statusCode: 500,
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      });
+      const unknownError = AppError.internal('An unexpected error occurred', error);
+      await reply.status(500).send(unknownError.toJSON());
     }
   );
 }
 
 /**
- * Get the standard HTTP error name for a status code
+ * Map an HTTP status code to the closest ErrorCode enum value
  */
-function getHttpErrorName(statusCode: number): string {
-  const names: Record<number, string> = {
-    400: 'Bad Request',
-    401: 'Unauthorized',
-    403: 'Forbidden',
-    404: 'Not Found',
-    405: 'Method Not Allowed',
-    409: 'Conflict',
-    410: 'Gone',
-    422: 'Unprocessable Entity',
-    429: 'Too Many Requests',
-    500: 'Internal Server Error',
-    501: 'Not Implemented',
-    502: 'Bad Gateway',
-    503: 'Service Unavailable',
-    504: 'Gateway Timeout',
+function httpStatusToErrorCode(statusCode: number): ErrorCode {
+  const map: Record<number, ErrorCode> = {
+    400: ErrorCode.BAD_REQUEST,
+    401: ErrorCode.UNAUTHORIZED,
+    403: ErrorCode.FORBIDDEN,
+    404: ErrorCode.NOT_FOUND,
+    409: ErrorCode.CONFLICT,
+    422: ErrorCode.VALIDATION_ERROR,
+    429: ErrorCode.RATE_LIMITED,
+    502: ErrorCode.EXTERNAL_SERVICE_ERROR,
+    503: ErrorCode.SERVICE_UNAVAILABLE,
   };
-  return names[statusCode] ?? 'Error';
+  return map[statusCode] ?? (statusCode >= 500 ? ErrorCode.INTERNAL_ERROR : ErrorCode.BAD_REQUEST);
 }

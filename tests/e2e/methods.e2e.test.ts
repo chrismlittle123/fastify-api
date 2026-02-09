@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestApp, type TestContext } from './setup.js';
 import { z } from '../../src/index.js';
 import { registerRoute, defineRoute } from '../../src/routes/index.js';
+import { AppError } from '../../src/errors/index.js';
 
 describe('E2E: HTTP Methods', () => {
   let ctx: TestContext;
@@ -32,16 +33,18 @@ describe('E2E: HTTP Methods', () => {
             updatedAt: z.string(),
           }),
           404: z.object({
-            statusCode: z.number(),
-            error: z.string(),
-            message: z.string(),
+            error: z.object({
+              code: z.string(),
+              message: z.string(),
+              details: z.record(z.unknown()).optional(),
+            }),
           }),
         },
       },
       handler: async (request, reply) => {
         const item = items.get(request.params.id);
         if (!item) {
-          throw reply.server.httpErrors.notFound(`Item ${request.params.id} not found`);
+          throw AppError.notFound('Item', request.params.id);
         }
         return item;
       },
@@ -98,15 +101,17 @@ describe('E2E: HTTP Methods', () => {
             updatedAt: z.string(),
           }),
           404: z.object({
-            statusCode: z.number(),
-            error: z.string(),
-            message: z.string(),
+            error: z.object({
+              code: z.string(),
+              message: z.string(),
+              details: z.record(z.unknown()).optional(),
+            }),
           }),
         },
       },
       handler: async (request, reply) => {
         if (!items.has(request.params.id)) {
-          throw reply.server.httpErrors.notFound(`Item ${request.params.id} not found`);
+          throw AppError.notFound('Item', request.params.id);
         }
         const item = {
           id: request.params.id,
@@ -138,16 +143,18 @@ describe('E2E: HTTP Methods', () => {
             updatedAt: z.string(),
           }),
           404: z.object({
-            statusCode: z.number(),
-            error: z.string(),
-            message: z.string(),
+            error: z.object({
+              code: z.string(),
+              message: z.string(),
+              details: z.record(z.unknown()).optional(),
+            }),
           }),
         },
       },
       handler: async (request, reply) => {
         const existing = items.get(request.params.id);
         if (!existing) {
-          throw reply.server.httpErrors.notFound(`Item ${request.params.id} not found`);
+          throw AppError.notFound('Item', request.params.id);
         }
         const item = {
           ...existing,
@@ -172,15 +179,17 @@ describe('E2E: HTTP Methods', () => {
         response: {
           204: z.undefined(),
           404: z.object({
-            statusCode: z.number(),
-            error: z.string(),
-            message: z.string(),
+            error: z.object({
+              code: z.string(),
+              message: z.string(),
+              details: z.record(z.unknown()).optional(),
+            }),
           }),
         },
       },
       handler: async (request, reply) => {
         if (!items.has(request.params.id)) {
-          throw reply.server.httpErrors.notFound(`Item ${request.params.id} not found`);
+          throw AppError.notFound('Item', request.params.id);
         }
         items.delete(request.params.id);
         reply.status(204);

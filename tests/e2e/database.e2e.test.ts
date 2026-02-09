@@ -3,7 +3,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { sql } from 'drizzle-orm';
 import { createTestApp, type TestContext } from './setup.js';
+import { AppError } from '../../src/errors/index.js';
 
 describe('E2E: Database Integration', () => {
   let ctx: TestContext;
@@ -11,32 +13,26 @@ describe('E2E: Database Integration', () => {
   beforeAll(async () => {
     ctx = await createTestApp();
 
-    // Add a test route that uses the database
+    // Add a test route that uses the database via Drizzle ORM
     ctx.app.get('/test/db/time', async () => {
       if (!ctx.app.db) {
-        throw ctx.app.httpErrors.serviceUnavailable('Database not configured');
+        throw AppError.serviceUnavailable('Database not configured');
       }
 
-      const result = (await ctx.app.db.query('SELECT NOW() as current_time')) as Array<{
-        current_time: string | Date;
-      }>;
-      const time = result[0]?.current_time;
-      const serverTime = time instanceof Date ? time.toISOString() : String(time);
+      const result = await ctx.app.db.drizzle.execute<{ current_time: string }>(sql`SELECT NOW() as current_time`);
       return {
-        serverTime,
+        serverTime: result[0]?.current_time ?? null,
       };
     });
 
     ctx.app.get('/test/db/version', async () => {
       if (!ctx.app.db) {
-        throw ctx.app.httpErrors.serviceUnavailable('Database not configured');
+        throw AppError.serviceUnavailable('Database not configured');
       }
 
-      const result = (await ctx.app.db.query('SELECT version()')) as Array<{
-        version: string;
-      }>;
+      const result = await ctx.app.db.drizzle.execute<{ version: string }>(sql`SELECT version()`);
       return {
-        version: result[0]?.version,
+        version: result[0]?.version ?? null,
       };
     });
   });
@@ -73,7 +69,6 @@ describe('E2E: Database Integration', () => {
   it('should have database available on app instance', () => {
     expect(ctx.app.db).toBeDefined();
     expect(ctx.app.db?.drizzle).toBeDefined();
-    expect(ctx.app.db?.sql).toBeDefined();
-    expect(typeof ctx.app.db?.query).toBe('function');
+    expect(typeof ctx.app.db?.ping).toBe('function');
   });
 });

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply, RouteOptions } from
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { z} from 'zod';
 import type { ZodSchema } from 'zod';
+import { AppError } from '../errors/index.js';
 
 export type AuthType = 'jwt' | 'apiKey' | 'any' | 'public';
 
@@ -58,15 +59,15 @@ export function registerRoute(app: FastifyInstance, route: RouteDefinition): voi
       // For 'any', we need custom logic to try either auth method
       preHandler = async (request: FastifyRequest, reply: FastifyReply) => {
         const authHeader = request.headers.authorization;
-        // HTTP headers are case-insensitive, but Node.js lowercases them
-        const apiKeyHeader = request.headers['x-api-key'];
+        const apiKeyHeaderName = (app.config.auth?.apiKey?.header ?? 'X-API-Key').toLowerCase();
+        const apiKeyHeader = request.headers[apiKeyHeaderName];
 
         if (authHeader?.startsWith('Bearer ') && app.authenticateJWT) {
           return app.authenticateJWT(request, reply);
         } else if (apiKeyHeader && app.authenticateAPIKey) {
           return app.authenticateAPIKey(request, reply);
         } else {
-          return reply.send(app.httpErrors.unauthorized('Authentication required'));
+          throw AppError.unauthorized('Authentication required');
         }
       };
       break;
