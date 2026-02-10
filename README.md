@@ -8,6 +8,12 @@ Standardized Fastify API framework for Palindrom services. Install it as a depen
 pnpm add @palindrom/fastify-api
 ```
 
+Or install directly from GitHub:
+
+```bash
+pnpm add github:chrismlittle123/fastify-api
+```
+
 ## Quick Start
 
 ```typescript
@@ -168,15 +174,6 @@ const result = await app.db.drizzle.execute(sql`SELECT NOW()`);
 const isUp = await app.db.ping();
 ```
 
-### Migrations
-
-```bash
-pnpm run db:generate   # Generate migrations from schema
-pnpm run db:migrate    # Run pending migrations
-pnpm run db:push       # Push schema changes directly (dev only)
-pnpm run db:studio     # Open Drizzle Studio GUI
-```
-
 ## Health Checks
 
 Three endpoints are registered automatically:
@@ -257,3 +254,4 @@ See the `examples/` directory:
 
 - [`basic-server.ts`](examples/basic-server.ts) — Minimal setup
 - [`full-api-server.ts`](examples/full-api-server.ts) — All features demonstrated
+- [`cloud-run-server.ts`](examples/cloud-run-server.ts) — Cloud Run deployment with GCP Secret Manager

@@ -20,9 +20,5 @@ enabled = true
 [code.security.pnpmaudit]
 enabled = true
 
-[infra]
-enabled = true
-manifest = "infra-manifest.json"
-
 [metadata]
 tier = "internal"

@@ -1,5 +1,0 @@
-# @standards-kit/conform configuration for infra
-[extends]
-registry = "github:chrismlittle123/standards-community"
-rulesets = ["typescript-internal"]
-

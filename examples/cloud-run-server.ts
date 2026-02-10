@@ -14,7 +14,7 @@
  * - JWT_EXPIRES_IN: JWT expiration (default: 1h)
  */
 
-import { createApp, type APIKeyInfo } from './index.js';
+import { createApp, type APIKeyInfo } from '../src/index.js';
 
 async function getSecretFromGcp(secretName: string): Promise<string> {
   const { SecretManagerServiceClient } = await import('@google-cloud/secret-manager');

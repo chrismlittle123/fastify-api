@@ -1,4 +1,0 @@
-config:
-  gcp:project: ${GOOGLE_PROJECT}
-  gcp:region: europe-west2
-  fastify-api:environment: dev
