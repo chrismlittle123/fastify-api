@@ -31,11 +31,7 @@ export interface App extends FastifyInstance {
   shutdown: () => Promise<void>;
 }
 
-export async function createApp(configInput: AppConfigInput, options?: AppOptions): Promise<App> {
-  // Validate and parse config
-  const config = appConfigSchema.parse(configInput);
-
-  // Create Fastify instance
+function createFastifyInstance(config: AppConfig): FastifyInstance {
   const fastify = Fastify({
     logger: {
       level: config.logging.level,
@@ -50,25 +46,21 @@ export async function createApp(configInput: AppConfigInput, options?: AppOption
     },
   });
 
-  // Set up Zod type provider
   fastify.setValidatorCompiler(validatorCompiler);
   fastify.setSerializerCompiler(serializerCompiler);
-
-  // Attach config to app
   fastify.decorate('config', config);
 
-  // Register plugins
-  await registerSensible(fastify);
+  return fastify;
+}
 
-  // Register structured error handler
+async function registerPlugins(fastify: FastifyInstance, config: AppConfig): Promise<void> {
+  await registerSensible(fastify);
   await registerErrorHandler(fastify);
 
-  // Register request logging for observability (if enabled)
   if (config.observability?.requestLogging !== false) {
     await registerRequestLogging(fastify);
   }
 
-  // Set up OpenAPI/Scalar docs if configured
   if (config.docs) {
     await registerOpenAPI(fastify, config, {
       title: config.docs.title,
@@ -77,8 +69,13 @@ export async function createApp(configInput: AppConfigInput, options?: AppOption
       docsPath: config.docs.path,
     });
   }
+}
 
-  // Set up JWT auth if configured
+async function registerAuth(
+  fastify: FastifyInstance,
+  config: AppConfig,
+  options?: AppOptions
+): Promise<void> {
   if (config.auth?.jwt) {
     await registerJWT(fastify, {
       secret: config.auth.jwt.secret,
@@ -88,29 +85,27 @@ export async function createApp(configInput: AppConfigInput, options?: AppOption
     });
   }
 
-  // Set up API Key auth if configured
   if (config.auth?.apiKey && options?.apiKeyValidator) {
     await registerAPIKey(fastify, {
       header: config.auth.apiKey.header,
       validate: options.apiKeyValidator,
     });
   }
+}
 
-  // Set up database if configured
-  if (config.db) {
-    const db = createDatabase(config.db);
-    fastify.decorate('db', db);
+function setupDatabase(fastify: FastifyInstance, config: AppConfig): void {
+  if (!config.db) return;
 
-    fastify.addHook('onClose', async () => {
-      fastify.log.info('Closing database connection');
-      await db.close();
-    });
-  }
+  const db = createDatabase(config.db);
+  fastify.decorate('db', db);
 
-  // Register health check routes
-  await registerHealthCheck(fastify);
+  fastify.addHook('onClose', async () => {
+    fastify.log.info('Closing database connection');
+    await db.close();
+  });
+}
 
-  // Create app with additional methods
+function attachAppMethods(fastify: FastifyInstance, config: AppConfig): App {
   const app = fastify as unknown as App;
 
   app.start = async () => {
@@ -135,6 +130,16 @@ export async function createApp(configInput: AppConfigInput, options?: AppOption
   };
 
   return app;
+}
+
+export async function createApp(configInput: AppConfigInput, options?: AppOptions): Promise<App> {
+  const config = appConfigSchema.parse(configInput);
+  const fastify = createFastifyInstance(config);
+  await registerPlugins(fastify, config);
+  await registerAuth(fastify, config, options);
+  setupDatabase(fastify, config);
+  await registerHealthCheck(fastify);
+  return attachAppMethods(fastify, config);
 }
 
 // Re-export type provider for typed routes

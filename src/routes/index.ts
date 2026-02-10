@@ -35,13 +35,14 @@ export function defineRoute<S extends RouteSchema>(definition: RouteDefinition<S
   return definition;
 }
 
-export function registerRoute(app: FastifyInstance, route: RouteDefinition): void {
-  const typedApp = app.withTypeProvider<ZodTypeProvider>();
-
+function resolveAuthPreHandler(
+  app: FastifyInstance,
+  auth: AuthType | undefined
+): { security: Record<string, string[]>[]; preHandler: RouteOptions['preHandler'] } {
   const security: Record<string, string[]>[] = [];
   let preHandler: RouteOptions['preHandler'];
 
-  switch (route.auth) {
+  switch (auth) {
     case 'jwt':
       security.push({ bearerAuth: [] });
       if (app.authenticateJWT) {
@@ -56,7 +57,6 @@ export function registerRoute(app: FastifyInstance, route: RouteDefinition): voi
       break;
     case 'any':
       security.push({ bearerAuth: [] }, { apiKeyAuth: [] });
-      // For 'any', we need custom logic to try either auth method
       preHandler = async (request: FastifyRequest, reply: FastifyReply) => {
         const authHeader = request.headers.authorization;
         const apiKeyHeaderName = (app.config.auth?.apiKey?.header ?? 'X-API-Key').toLowerCase();
@@ -73,11 +73,14 @@ export function registerRoute(app: FastifyInstance, route: RouteDefinition): voi
       break;
     case 'public':
     default:
-      // No auth required
       break;
   }
 
-  // Build schema object with only defined properties to avoid Fastify warnings
+  return { security, preHandler };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildRouteSchema(route: RouteDefinition, security: Record<string, string[]>[]): Record<string, any> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const schema: Record<string, any> = {};
 
@@ -90,14 +93,20 @@ export function registerRoute(app: FastifyInstance, route: RouteDefinition): voi
   if (route.description) schema['description'] = route.description;
   if (security.length > 0) schema['security'] = security;
 
+  return schema;
+}
+
+export function registerRoute(app: FastifyInstance, route: RouteDefinition): void {
+  const typedApp = app.withTypeProvider<ZodTypeProvider>();
+  const { security, preHandler } = resolveAuthPreHandler(app, route.auth);
+  const schema = buildRouteSchema(route, security);
+
   typedApp.route({
     method: route.method,
     url: route.url,
     schema,
     preHandler,
     handler: async (request, reply) => {
-      // Type assertion needed due to Zod type provider complexity
-      // The actual runtime types are validated by Zod schemas
       return route.handler(request as Parameters<typeof route.handler>[0], reply);
     },
   });

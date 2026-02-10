@@ -16,14 +16,10 @@
 
 import { createApp, type APIKeyInfo } from './index.js';
 
-/**
- * Fetch a secret from GCP Secret Manager
- */
 async function getSecretFromGcp(secretName: string): Promise<string> {
   const { SecretManagerServiceClient } = await import('@google-cloud/secret-manager');
   const client = new SecretManagerServiceClient();
 
-  // Append /versions/latest if not already versioned
   const versionedName = secretName.includes('/versions/')
     ? secretName
     : `${secretName}/versions/latest`;
@@ -38,93 +34,82 @@ async function getSecretFromGcp(secretName: string): Promise<string> {
   if (typeof payload === 'string') {
     return payload;
   }
-  // payload is Uint8Array
   return Buffer.from(payload).toString('utf8');
 }
 
-/**
- * Resolve JWT secret - either from environment or GCP Secret Manager
- */
 async function resolveJwtSecret(): Promise<string> {
-  // Direct secret value takes precedence (for local development)
   if (process.env['JWT_SECRET']) {
     return process.env['JWT_SECRET'];
   }
 
-  // Check for GCP Secret Manager reference (set by @palindrom-ai/infra)
   const secretName = process.env['JWT_SECRET_NAME'];
   if (secretName) {
-    console.log(`Fetching JWT secret from Secret Manager: ${secretName}`);
+    console.warn(`Fetching JWT secret from Secret Manager: ${secretName}`);
     return getSecretFromGcp(secretName);
   }
 
   throw new Error('Missing required environment variable: JWT_SECRET or JWT_SECRET_NAME');
 }
 
+function buildDbConfig(): { connectionString: string; poolSize: number } | undefined {
+  if (!process.env['DATABASE_URL']) return undefined;
+  return {
+    connectionString: process.env['DATABASE_URL'],
+    poolSize: parseInt(process.env['DB_POOL_SIZE'] ?? '10', 10),
+  };
+}
+
+function buildAppConfig(port: number, host: string, jwtSecret: string) {
+  return {
+    name: process.env['APP_NAME'] ?? 'fastify-api',
+    server: { port, host },
+    db: buildDbConfig(),
+    auth: {
+      jwt: {
+        secret: jwtSecret,
+        issuer: process.env['JWT_ISSUER'],
+        expiresIn: process.env['JWT_EXPIRES_IN'] ?? '1h',
+      },
+      apiKey: {
+        header: process.env['API_KEY_HEADER'] ?? 'X-API-Key',
+      },
+    },
+    docs: {
+      title: process.env['DOCS_TITLE'] ?? 'Fastify API',
+      description: process.env['DOCS_DESCRIPTION'] ?? 'API Documentation',
+      version: process.env['DOCS_VERSION'] ?? '1.0.0',
+      path: '/docs',
+    },
+    logging: {
+      level: (process.env['LOG_LEVEL'] as 'info' | 'debug' | 'warn' | 'error') ?? 'info',
+      pretty: process.env['NODE_ENV'] !== 'production',
+    },
+  };
+}
+
+function validateApiKey(key: string): APIKeyInfo | null {
+  const staticKeys = process.env['API_KEYS'];
+  if (!staticKeys) return null;
+
+  const pairs = staticKeys.split(',');
+  for (const pair of pairs) {
+    const [apiKey, name] = pair.split(':');
+    if (apiKey === key) {
+      return { id: apiKey, name: name ?? 'API Key', permissions: ['read', 'write'] };
+    }
+  }
+  return null;
+}
+
 async function main() {
   const port = parseInt(process.env['PORT'] ?? '8080', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';
-
-  // Resolve JWT secret (from env or Secret Manager)
   const jwtSecret = await resolveJwtSecret();
 
-  // Database config is optional
-  const dbConfig = process.env['DATABASE_URL']
-    ? {
-        connectionString: process.env['DATABASE_URL'],
-        poolSize: parseInt(process.env['DB_POOL_SIZE'] ?? '10', 10),
-      }
-    : undefined;
+  const app = await createApp(buildAppConfig(port, host, jwtSecret), {
+    apiKeyValidator: async (key: string): Promise<APIKeyInfo | null> => validateApiKey(key),
+  });
 
-  const app = await createApp(
-    {
-      name: process.env['APP_NAME'] ?? 'fastify-api',
-      server: {
-        port,
-        host,
-      },
-      db: dbConfig,
-      auth: {
-        jwt: {
-          secret: jwtSecret,
-          issuer: process.env['JWT_ISSUER'],
-          expiresIn: process.env['JWT_EXPIRES_IN'] ?? '1h',
-        },
-        apiKey: {
-          header: process.env['API_KEY_HEADER'] ?? 'X-API-Key',
-        },
-      },
-      docs: {
-        title: process.env['DOCS_TITLE'] ?? 'Fastify API',
-        description: process.env['DOCS_DESCRIPTION'] ?? 'API Documentation',
-        version: process.env['DOCS_VERSION'] ?? '1.0.0',
-        path: '/docs',
-      },
-      logging: {
-        level: (process.env['LOG_LEVEL'] as 'info' | 'debug' | 'warn' | 'error') ?? 'info',
-        pretty: process.env['NODE_ENV'] !== 'production',
-      },
-    },
-    {
-      // API key validator can be customized via environment or database lookup
-      apiKeyValidator: async (key: string): Promise<APIKeyInfo | null> => {
-        // Check for static API keys from environment (comma-separated key:name pairs)
-        const staticKeys = process.env['API_KEYS'];
-        if (staticKeys) {
-          const pairs = staticKeys.split(',');
-          for (const pair of pairs) {
-            const [apiKey, name] = pair.split(':');
-            if (apiKey === key) {
-              return { id: apiKey, name: name ?? 'API Key', permissions: ['read', 'write'] };
-            }
-          }
-        }
-        return null;
-      },
-    }
-  );
-
-  // Handle graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
   for (const signal of signals) {
     process.on(signal, async () => {

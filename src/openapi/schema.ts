@@ -12,13 +12,13 @@ import type { FastifyInstance } from 'fastify';
  * These types represent the structure of an OpenAPI specification
  */
 
-export interface OpenAPIContact {
+interface OpenAPIContact {
   name?: string;
   url?: string;
   email?: string;
 }
 
-export interface OpenAPILicense {
+interface OpenAPILicense {
   name: string;
   url?: string;
   identifier?: string;
@@ -34,7 +34,7 @@ export interface OpenAPIInfo {
   summary?: string;
 }
 
-export interface OpenAPIServerVariable {
+interface OpenAPIServerVariable {
   enum?: string[];
   default: string;
   description?: string;

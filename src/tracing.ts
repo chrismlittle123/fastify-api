@@ -112,16 +112,16 @@ const sdk = new NodeSDK({
 
 sdk.start();
 
-console.log(`[tracing] OpenTelemetry initialized for service: ${serviceName}`);
+console.warn(`[tracing] OpenTelemetry initialized for service: ${serviceName}`);
 if (otlpEndpoint) {
-  console.log(`[tracing] Sending traces, metrics, and logs to: ${otlpEndpoint}`);
+  console.warn(`[tracing] Sending traces, metrics, and logs to: ${otlpEndpoint}`);
 }
 
 // Graceful shutdown
 const shutdown = async () => {
   try {
     await Promise.all([sdk.shutdown(), loggerProvider.shutdown()]);
-    console.log('[tracing] OpenTelemetry shut down successfully');
+    console.warn('[tracing] OpenTelemetry shut down successfully');
   } catch (error) {
     console.error('[tracing] Error shutting down OpenTelemetry:', error);
   }

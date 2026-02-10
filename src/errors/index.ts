@@ -150,61 +150,57 @@ export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }
 
+async function handleError(error: Error, request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (isAppError(error)) {
+    request.log.error(
+      {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        stack: error.stack,
+        cause: error.cause,
+      },
+      'Application error'
+    );
+
+    await reply.status(error.statusCode).send(error.toJSON());
+    return;
+  }
+
+  if ('statusCode' in error && typeof error.statusCode === 'number') {
+    const httpError = error as Error & { statusCode: number; expose?: boolean };
+    const code = httpStatusToErrorCode(httpError.statusCode);
+    const appError = new AppError(code, error.message);
+
+    request.log.error({ err: error }, 'HTTP error');
+    await reply.status(httpError.statusCode).send(appError.toJSON());
+    return;
+  }
+
+  if (error.name === 'ZodError' && 'issues' in error) {
+    const zodError = error as Error & { issues: { path: (string | number)[]; message: string }[] };
+    const appError = AppError.validationError('Validation failed', {
+      issues: zodError.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
+    });
+
+    await reply.status(appError.statusCode).send(appError.toJSON());
+    return;
+  }
+
+  request.log.error({ err: error }, 'Unhandled error');
+
+  const unknownError = AppError.internal('An unexpected error occurred', error);
+  await reply.status(500).send(unknownError.toJSON());
+}
+
 /**
  * Register the error handler plugin
  */
 export async function registerErrorHandler(app: FastifyInstance): Promise<void> {
-  app.setErrorHandler(
-    async (error: Error, request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-      // Handle AppError - use structured format
-      if (isAppError(error)) {
-        request.log.error(
-          {
-            code: error.code,
-            message: error.message,
-            details: error.details,
-            stack: error.stack,
-            cause: error.cause,
-          },
-          'Application error'
-        );
-
-        await reply.status(error.statusCode).send(error.toJSON());
-        return;
-      }
-
-      // Handle Fastify/sensible HTTP errors - normalize to AppError format
-      if ('statusCode' in error && typeof error.statusCode === 'number') {
-        const httpError = error as Error & { statusCode: number; expose?: boolean };
-        const code = httpStatusToErrorCode(httpError.statusCode);
-        const appError = new AppError(code, error.message);
-
-        request.log.error({ err: error }, 'HTTP error');
-        await reply.status(httpError.statusCode).send(appError.toJSON());
-        return;
-      }
-
-      // Handle Zod validation errors (from fastify-type-provider-zod)
-      if (error.name === 'ZodError' && 'issues' in error) {
-        const zodError = error as Error & { issues: { path: (string | number)[]; message: string }[] };
-        const appError = AppError.validationError('Validation failed', {
-          issues: zodError.issues.map((issue) => ({
-            path: issue.path.join('.'),
-            message: issue.message,
-          })),
-        });
-
-        await reply.status(appError.statusCode).send(appError.toJSON());
-        return;
-      }
-
-      // Handle unknown errors
-      request.log.error({ err: error }, 'Unhandled error');
-
-      const unknownError = AppError.internal('An unexpected error occurred', error);
-      await reply.status(500).send(unknownError.toJSON());
-    }
-  );
+  app.setErrorHandler(handleError);
 }
 
 /**

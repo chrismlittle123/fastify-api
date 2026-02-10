@@ -11,11 +11,6 @@ export interface Database {
   close: () => Promise<void>;
 }
 
-export interface DatabaseOptions {
-  connectionString: string;
-  poolSize?: number;
-  idleTimeout?: number;
-}
 
 export function createDatabase(options: NonNullable<AppConfig['db']>): Database {
   const sql = postgres(options.connectionString, {

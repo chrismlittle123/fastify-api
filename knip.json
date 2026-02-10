@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/server.ts", "src/plugins/auth/index.ts"],
+  "project": ["src/**/*.ts"],
+  "ignore": ["dist/**", "infra/**", "examples/**", "scripts/**"],
+  "ignoreDependencies": ["pino-pretty", "tsx"]
+}

@@ -3,7 +3,7 @@ import fastifySwagger from '@fastify/swagger';
 import scalarPlugin from '@scalar/fastify-api-reference';
 import type { AppConfig } from '../config/index.js';
 
-export interface OpenAPIConfig {
+interface OpenAPIConfig {
   title: string;
   description?: string;
   version: string;
