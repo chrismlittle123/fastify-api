@@ -1,8 +1,15 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply, RouteOptions } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply, FastifySchema, RouteOptions } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { z} from 'zod';
 import type { ZodSchema } from 'zod';
 import { AppError } from '../errors/index.js';
+
+interface RouteSchemaWithMeta extends FastifySchema {
+  tags?: string[];
+  summary?: string;
+  description?: string;
+  security?: Record<string, string[]>[];
+}
 
 export type AuthType = 'jwt' | 'apiKey' | 'any' | 'public';
 
@@ -79,19 +86,17 @@ function resolveAuthPreHandler(
   return { security, preHandler };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildRouteSchema(route: RouteDefinition, security: Record<string, string[]>[]): Record<string, any> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const schema: Record<string, any> = {};
+function buildRouteSchema(route: RouteDefinition, security: Record<string, string[]>[]): RouteSchemaWithMeta {
+  const schema: RouteSchemaWithMeta = {};
 
-  if (route.schema.params) schema['params'] = route.schema.params;
-  if (route.schema.querystring) schema['querystring'] = route.schema.querystring;
-  if (route.schema.body) schema['body'] = route.schema.body;
-  if (route.schema.response) schema['response'] = route.schema.response;
-  if (route.tags) schema['tags'] = route.tags;
-  if (route.summary) schema['summary'] = route.summary;
-  if (route.description) schema['description'] = route.description;
-  if (security.length > 0) schema['security'] = security;
+  if (route.schema.params) schema.params = route.schema.params;
+  if (route.schema.querystring) schema.querystring = route.schema.querystring;
+  if (route.schema.body) schema.body = route.schema.body;
+  if (route.schema.response) schema.response = route.schema.response;
+  if (route.tags) schema.tags = route.tags;
+  if (route.summary) schema.summary = route.summary;
+  if (route.description) schema.description = route.description;
+  if (security.length > 0) schema.security = security;
 
   return schema;
 }

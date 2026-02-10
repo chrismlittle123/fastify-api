@@ -42,6 +42,38 @@ describe('buildOTelEnvVars', () => {
     const vars = buildOTelEnvVars({ serviceName: 'svc' });
     expect(vars.OTEL_EXPORTER_OTLP_ENDPOINT).toBe('');
   });
+
+  it('percent-encodes = in attribute values', () => {
+    const vars = buildOTelEnvVars({
+      serviceName: 'svc',
+      attributes: { query: 'a=b' },
+    });
+    expect(vars.OTEL_RESOURCE_ATTRIBUTES).toBe('query=a%3Db');
+  });
+
+  it('percent-encodes , in attribute values', () => {
+    const vars = buildOTelEnvVars({
+      serviceName: 'svc',
+      attributes: { tags: 'a,b' },
+    });
+    expect(vars.OTEL_RESOURCE_ATTRIBUTES).toBe('tags=a%2Cb');
+  });
+
+  it('percent-encodes % in attribute values', () => {
+    const vars = buildOTelEnvVars({
+      serviceName: 'svc',
+      attributes: { encoded: '100%' },
+    });
+    expect(vars.OTEL_RESOURCE_ATTRIBUTES).toBe('encoded=100%25');
+  });
+
+  it('percent-encodes special chars in attribute keys', () => {
+    const vars = buildOTelEnvVars({
+      serviceName: 'svc',
+      attributes: { 'k=1': 'v' },
+    });
+    expect(vars.OTEL_RESOURCE_ATTRIBUTES).toBe('k%3D1=v');
+  });
 });
 
 describe('registerRequestLogging', () => {

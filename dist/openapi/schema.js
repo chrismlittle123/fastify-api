@@ -81,7 +81,7 @@ export async function getOpenAPIPaths(app, pathPatterns) {
     };
     const filteredPaths = {};
     for (const [path, pathItem] of Object.entries(paths)) {
-        if (pathPatterns.some((pattern) => matchesPattern(path, pattern))) {
+        if (pathItem && pathPatterns.some((pattern) => matchesPattern(path, pattern))) {
             filteredPaths[path] = pathItem;
         }
     }

@@ -41,26 +41,24 @@ function resolveAuthPreHandler(app, auth) {
     }
     return { security, preHandler };
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildRouteSchema(route, security) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const schema = {};
     if (route.schema.params)
-        schema['params'] = route.schema.params;
+        schema.params = route.schema.params;
     if (route.schema.querystring)
-        schema['querystring'] = route.schema.querystring;
+        schema.querystring = route.schema.querystring;
     if (route.schema.body)
-        schema['body'] = route.schema.body;
+        schema.body = route.schema.body;
     if (route.schema.response)
-        schema['response'] = route.schema.response;
+        schema.response = route.schema.response;
     if (route.tags)
-        schema['tags'] = route.tags;
+        schema.tags = route.tags;
     if (route.summary)
-        schema['summary'] = route.summary;
+        schema.summary = route.summary;
     if (route.description)
-        schema['description'] = route.description;
+        schema.description = route.description;
     if (security.length > 0)
-        schema['security'] = security;
+        schema.security = security;
     return schema;
 }
 export function registerRoute(app, route) {

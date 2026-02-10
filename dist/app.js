@@ -70,28 +70,27 @@ function setupDatabase(fastify, config) {
     });
 }
 function attachAppMethods(fastify, config) {
-    const app = fastify;
-    app.start = async () => {
+    fastify.decorate('start', async () => {
         try {
-            await app.listen({
+            await fastify.listen({
                 port: config.server.port,
                 host: config.server.host,
             });
-            app.log.info(`${config.name} started on ${config.server.host}:${config.server.port}`);
+            fastify.log.info(`${config.name} started on ${config.server.host}:${config.server.port}`);
             if (config.docs) {
-                app.log.info(`API docs available at ${config.docs.path}`);
+                fastify.log.info(`API docs available at ${config.docs.path}`);
             }
         }
         catch (err) {
-            app.log.error(err);
+            fastify.log.error(err);
             throw err;
         }
-    };
-    app.shutdown = async () => {
-        app.log.info('Shutting down...');
-        await app.close();
-    };
-    return app;
+    });
+    fastify.decorate('shutdown', async () => {
+        fastify.log.info('Shutting down...');
+        await fastify.close();
+    });
+    return fastify;
 }
 export async function createApp(configInput, options) {
     const config = appConfigSchema.parse(configInput);

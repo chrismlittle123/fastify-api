@@ -1,4 +1,12 @@
 /**
+ * Percent-encode characters that are special in OTEL_RESOURCE_ATTRIBUTES.
+ * Per the OTel spec, `=` and `,` are delimiters, so values containing them
+ * must be percent-encoded. Encode `%` first to avoid double-encoding.
+ */
+function encodeOTelValue(s) {
+    return s.replace(/%/g, '%25').replace(/,/g, '%2C').replace(/=/g, '%3D');
+}
+/**
  * Build OTEL environment variables from config
  */
 export function buildOTelEnvVars(config) {
@@ -12,7 +20,7 @@ export function buildOTelEnvVars(config) {
     };
     if (config.attributes && Object.keys(config.attributes).length > 0) {
         envVars.OTEL_RESOURCE_ATTRIBUTES = Object.entries(config.attributes)
-            .map(([key, value]) => `${key}=${value}`)
+            .map(([key, value]) => `${encodeOTelValue(key)}=${encodeOTelValue(value)}`)
             .join(',');
     }
     return envVars;

@@ -22,11 +22,12 @@ import {
   SimpleLogRecordProcessor,
   BatchLogRecordProcessor,
   ConsoleLogRecordExporter,
+  type LogRecordProcessor,
 } from '@opentelemetry/sdk-logs';
 import { logs } from '@opentelemetry/api-logs';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
-import { ConsoleSpanExporter, SimpleSpanProcessor, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { ConsoleSpanExporter, SimpleSpanProcessor, BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 
 // Enable debug logging if OTEL_DEBUG is set
@@ -47,7 +48,7 @@ const resource = resourceFromAttributes({
 
 // Configure trace exporter and span processor
 // Use SimpleSpanProcessor for console (immediate export) or BatchSpanProcessor for OTLP
-let spanProcessor;
+let spanProcessor: SpanProcessor | undefined;
 if (useConsoleExporter) {
   spanProcessor = new SimpleSpanProcessor(new ConsoleSpanExporter());
 } else if (otlpEndpoint) {
@@ -70,7 +71,7 @@ const metricReader = otlpEndpoint
 
 // Configure log exporter and logger provider
 // This captures Pino logs (via auto-instrumentation) and sends them to SigNoz
-const logProcessors = [];
+const logProcessors: LogRecordProcessor[] = [];
 if (useConsoleExporter) {
   logProcessors.push(new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()));
 } else if (otlpEndpoint) {

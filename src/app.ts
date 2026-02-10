@@ -106,30 +106,28 @@ function setupDatabase(fastify: FastifyInstance, config: AppConfig): void {
 }
 
 function attachAppMethods(fastify: FastifyInstance, config: AppConfig): App {
-  const app = fastify as unknown as App;
-
-  app.start = async () => {
+  fastify.decorate('start', async () => {
     try {
-      await app.listen({
+      await fastify.listen({
         port: config.server.port,
         host: config.server.host,
       });
-      app.log.info(`${config.name} started on ${config.server.host}:${config.server.port}`);
+      fastify.log.info(`${config.name} started on ${config.server.host}:${config.server.port}`);
       if (config.docs) {
-        app.log.info(`API docs available at ${config.docs.path}`);
+        fastify.log.info(`API docs available at ${config.docs.path}`);
       }
     } catch (err) {
-      app.log.error(err);
+      fastify.log.error(err);
       throw err;
     }
-  };
+  });
 
-  app.shutdown = async () => {
-    app.log.info('Shutting down...');
-    await app.close();
-  };
+  fastify.decorate('shutdown', async () => {
+    fastify.log.info('Shutting down...');
+    await fastify.close();
+  });
 
-  return app;
+  return fastify as App;
 }
 
 export async function createApp(configInput: AppConfigInput, options?: AppOptions): Promise<App> {
