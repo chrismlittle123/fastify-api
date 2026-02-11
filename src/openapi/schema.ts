@@ -35,7 +35,7 @@ export type OpenAPISchema = OpenAPIV3_1.Document;
  *
  * @example
  * ```typescript
- * import { createApp, getOpenAPISchema } from '@palindrom/fastify-api';
+ * import { createApp, getOpenAPISchema } from '@progression-labs/fastify-api';
  *
  * const app = await createApp({ ... });
  * // Register your routes...

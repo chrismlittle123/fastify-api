@@ -1,5 +1,5 @@
 /**
- * Basic example showing how to use @palindrom/fastify-api
+ * Basic example showing how to use @progression-labs/fastify-api
  *
  * Run with:
  *   npm run docker:up      # Start PostgreSQL

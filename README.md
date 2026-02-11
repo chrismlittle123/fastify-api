@@ -1,11 +1,11 @@
-# @palindrom/fastify-api
+# @progression-labs/fastify-api
 
-Standardized Fastify API framework for Palindrom services. Install it as a dependency, provide config and business logic — monitoring, auth, errors, docs, and health checks are handled for you.
+Standardized Fastify API framework for Progression Labs services. Install it as a dependency, provide config and business logic — monitoring, auth, errors, docs, and health checks are handled for you.
 
 ## Install
 
 ```bash
-pnpm add @palindrom/fastify-api
+pnpm add @progression-labs/fastify-api
 ```
 
 Or install directly from GitHub:
@@ -17,7 +17,7 @@ pnpm add github:chrismlittle123/fastify-api
 ## Quick Start
 
 ```typescript
-import { createApp, defineRoute, registerRoute, z } from '@palindrom/fastify-api';
+import { createApp, defineRoute, registerRoute, z } from '@progression-labs/fastify-api';
 
 const app = await createApp({
   name: 'my-api',
@@ -37,7 +37,7 @@ Visit `http://localhost:3000/health` for health checks.
 Use `defineRoute()` for type-safe routes with Zod validation and OpenAPI generation:
 
 ```typescript
-import { createApp, defineRoute, registerRoute, z, AppError } from '@palindrom/fastify-api';
+import { createApp, defineRoute, registerRoute, z, AppError } from '@progression-labs/fastify-api';
 
 const getUser = defineRoute({
   method: 'GET',
@@ -130,7 +130,7 @@ All errors produce a unified response format:
 Use `AppError` factory methods to throw errors:
 
 ```typescript
-import { AppError } from '@palindrom/fastify-api';
+import { AppError } from '@progression-labs/fastify-api';
 
 throw AppError.notFound('User', '123');
 throw AppError.unauthorized('Token expired');
@@ -208,7 +208,7 @@ const app = await createApp({
 Enable OpenTelemetry tracing with one flag at startup:
 
 ```bash
-node --import @palindrom/fastify-api/tracing dist/server.js
+node --import @progression-labs/fastify-api/tracing dist/server.js
 ```
 
 Set environment variables to configure the exporter:
@@ -221,7 +221,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz:4318
 For local debugging, use console output:
 
 ```bash
-OTEL_CONSOLE_EXPORTER=true node --import @palindrom/fastify-api/tracing dist/server.js
+OTEL_CONSOLE_EXPORTER=true node --import @progression-labs/fastify-api/tracing dist/server.js
 ```
 
 ## Configuration Reference

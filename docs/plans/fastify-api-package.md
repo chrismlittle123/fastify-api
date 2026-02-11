@@ -24,7 +24,7 @@ Create an internal TypeScript package that provides a batteries-included Fastify
 ### Core API
 
 ```typescript
-import { createApp } from '@palindrom/fastify-api';
+import { createApp } from '@progression-labs/fastify-api';
 
 const app = await createApp({
   name: 'my-service',
@@ -78,7 +78,7 @@ Routes defined with Zod schemas as the source of truth, automatically generating
 
 ```typescript
 import { z } from 'zod';
-import { defineRoute } from '@palindrom/fastify-api';
+import { defineRoute } from '@progression-labs/fastify-api';
 
 const GetUserSchema = {
   params: z.object({
@@ -149,16 +149,16 @@ const users = await app.db.query.users.findMany();
 
 **Migrations via CLI:**
 ```bash
-npx @palindrom/fastify-api db:migrate
-npx @palindrom/fastify-api db:generate
-npx @palindrom/fastify-api db:push
+npx @progression-labs/fastify-api db:migrate
+npx @progression-labs/fastify-api db:generate
+npx @progression-labs/fastify-api db:push
 ```
 
 ### 5. OpenAPI & Scalar Docs
 
 - Auto-generates OpenAPI 3.1 spec from Zod schemas
 - Scalar documentation UI at `/docs`
-- Export OpenAPI YAML: `npx @palindrom/fastify-api openapi:export`
+- Export OpenAPI YAML: `npx @progression-labs/fastify-api openapi:export`
 
 ### 6. Monitoring Integration
 
@@ -177,7 +177,7 @@ npx @palindrom/fastify-api db:push
 ## Package Structure
 
 ```
-@palindrom/fastify-api/
+@progression-labs/fastify-api/
 ├── src/
 │   ├── index.ts              # Main exports
 │   ├── app.ts                # createApp factory
@@ -248,7 +248,7 @@ The `chrismlittle123/infra` package will provision:
 
 **Deployment config in infra:**
 ```typescript
-import { FastifyService } from '@palindrom/infra';
+import { FastifyService } from '@progression-labs/infra';
 
 new FastifyService('my-api', {
   image: 'my-api:latest',
