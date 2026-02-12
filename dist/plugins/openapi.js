@@ -1,9 +1,11 @@
 import fastifySwagger from '@fastify/swagger';
 import scalarPlugin from '@scalar/fastify-api-reference';
+import { jsonSchemaTransform } from 'fastify-type-provider-zod';
 export async function registerOpenAPI(app, config, openapi) {
     if (!openapi)
         return;
     await app.register(fastifySwagger, {
+        transform: jsonSchemaTransform,
         openapi: {
             openapi: '3.1.0',
             info: {
