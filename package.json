@@ -1,5 +1,5 @@
 {
-  "name": "@progression-labs/fastify-api",
+  "name": "@chrismlittle123/fastify-api",
   "version": "0.1.0",
   "description": "Batteries-included Fastify API framework with Zod, OpenAPI, and standardized patterns",
   "type": "module",
