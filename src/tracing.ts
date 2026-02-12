@@ -5,7 +5,9 @@
  * Run with: node --import ./dist/tracing.js dist/server.js
  *
  * Environment variables:
- * - OTEL_EXPORTER_OTLP_ENDPOINT: SigNoz endpoint (e.g., http://signoz:4318)
+ * - SIGNOZ_SECRET_ID: AWS Secrets Manager secret ID for the OTLP endpoint
+ * - SIGNOZ_SECRET_REGION: AWS region for Secrets Manager (default: eu-west-2)
+ * - OTEL_EXPORTER_OTLP_ENDPOINT: Fallback if no secret ID is set (local dev)
  * - OTEL_SERVICE_NAME: Service name for traces (default: fastify-api)
  * - OTEL_CONSOLE_EXPORTER: Set to 'true' for local debugging (console output)
  * - OTEL_DEBUG: Set to 'true' for OpenTelemetry debug logs
@@ -29,13 +31,29 @@ import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { ConsoleSpanExporter, SimpleSpanProcessor, BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 // Enable debug logging if OTEL_DEBUG is set
 if (process.env['OTEL_DEBUG'] === 'true') {
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
 }
 
-const otlpEndpoint = process.env['OTEL_EXPORTER_OTLP_ENDPOINT'];
+// Fetch OTLP endpoint from AWS Secrets Manager, fall back to env var
+async function resolveOtlpEndpoint(): Promise<string | undefined> {
+  const secretId = process.env['SIGNOZ_SECRET_ID'];
+  if (!secretId) {
+    return process.env['OTEL_EXPORTER_OTLP_ENDPOINT'];
+  }
+
+  const region = process.env['SIGNOZ_SECRET_REGION'] ?? 'eu-west-2';
+  const client = new SecretsManagerClient({ region });
+  const result = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
+  const parsed = JSON.parse(result.SecretString!) as { http: string; grpc: string };
+  console.warn(`[tracing] Resolved OTLP endpoint from secret: ${secretId}`);
+  return parsed.http;
+}
+
+const otlpEndpoint = await resolveOtlpEndpoint();
 const serviceName = process.env['OTEL_SERVICE_NAME'] ?? 'fastify-api';
 const useConsoleExporter = process.env['OTEL_CONSOLE_EXPORTER'] === 'true';
 
