@@ -38,7 +38,8 @@ async function resolveOtlpEndpoint() {
     const region = process.env['SIGNOZ_SECRET_REGION'] ?? 'eu-west-2';
     const client = new SecretsManagerClient({ region });
     const result = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
-    const parsed = JSON.parse(result.SecretString);
+    const secretString = result.SecretString ?? '';
+    const parsed = JSON.parse(secretString);
     console.warn(`[tracing] Resolved OTLP endpoint from secret: ${secretId}`);
     return parsed.http;
 }
