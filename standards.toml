@@ -24,5 +24,8 @@ enabled = true
 [code.security.pnpmaudit]
 enabled = true
 
+[process.commits]
+enabled = false  # commit-msg hook validates locally; merge commits fail this check
+
 [metadata]
 tier = "internal"
