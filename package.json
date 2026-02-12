@@ -40,6 +40,13 @@
   ],
   "author": "",
   "license": "MIT",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chrismlittle123/fastify-api.git"
+  },
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "node": ">=20.0.0"
